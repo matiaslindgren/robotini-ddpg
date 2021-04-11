@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Car</title>
+    <style>
+      body {
+        background: #000000;
+        color: #ffffff;
+        font-size: 20px;
+        margin: 20px;
+      }
+      .car-container {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+      }
+      .images {
+        display: grid;
+        grid-template-columns: 400px 10px;
+        grid-template-rows: 200px 10px;
+        grid-gap: 10px;
+      }
+      img {
+        image-rendering: crisp-edges;
+        width: 400px;
+        height: 200px;
+      }
+      img.observationX {
+        width: 400px;
+        height: 10px;
+      }
+      img.observationY {
+        width: 10px;
+        height: 200px;
+      }
+      pre {
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <script>var teamIds = [];</script>
+    <div class="car-container">
+      {% for team_id in team_ids %}
+      <div id="{{ team_id }}">
+        <pre class="metadata"></pre>
+        <div class="images">
+          <img class="originalFrame" />
+          <img class="observationY" />
+          <img class="observationX" />
+        </div>
+      </div>
+      <script>teamIds.push("{{ team_id }}");</script>
+      {% endfor %}
+    </div>
+    <script src="{{ url_for('static', filename='main.js') }}"></script>
+  </body>
+</html>
