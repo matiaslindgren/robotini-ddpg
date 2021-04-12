@@ -36,7 +36,7 @@ def send_json(sock, data):
 
 def communication_loop(stop_msg, simulator_url, login_cmds, frames, commands):
     signal.signal(signal.SIGINT, signal.SIG_IGN)
-    cmd = {"action": "forward", "value": 0}
+    default_cmd = {"action": "forward", "value": 0}
     with connect(simulator_url) as sock:
         for login_cmd in login_cmds:
             send_json(sock, login_cmd)
@@ -62,7 +62,7 @@ def communication_loop(stop_msg, simulator_url, login_cmds, frames, commands):
                 except queue.Empty:
                     break
             if not sent_something:
-                send_json(sock, cmd)
+                send_json(sock, default_cmd)
 
 
 class CarConnection:

@@ -26,20 +26,21 @@ def empty_state():
         "rotation": 4*[0],
         "track_angle": 0,
         "track_segment": 0,
-        "crashed": False,
+        "crash_count": 0,
         "lap_time": 0,
         "lap_count": 0,
     }
 
 
 def to_numpy(state):
-    for k in ["position", "velocity", "rotation"]:
-        state[k] = np.array(state[k], dtype=np.float32)
+    for k in ("position", "velocity", "rotation"):
+        if k in state:
+            state[k] = np.array(state[k], dtype=np.float32)
     return state
 
 
 def parse_simulator_logdata(sim_data):
-    state = defaultdict(empty_state)
+    state = defaultdict(dict)
     if sim_data["type"] == "GameStatus":
         for car_data in sim_data["cars"]:
             car = state[car_data.pop("name")]
@@ -64,15 +65,16 @@ def parse_simulator_logdata(sim_data):
     return state
 
 
-def log_parse_loop(stop_msg, stop_msg_q, simulator_spectator_url, redis_socket_path):
+def log_parse_loop(stop_msg_q, simulator_spectator_url, redis_socket_path):
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     redis = Redis(unix_socket_path=redis_socket_path)
+    json_decoder = json.JSONDecoder()
+    car2state = defaultdict(empty_state)
     with connection.connect(simulator_spectator_url) as sock:
-        json_decoder = json.JSONDecoder()
         partial_msg = ''
         while True:
             try:
-                if stop_msg_q.get(block=False) == stop_msg:
+                if stop_msg_q.get(block=False):
                     break
             except queue.Empty:
                 pass
@@ -87,11 +89,13 @@ def log_parse_loop(stop_msg, stop_msg_q, simulator_spectator_url, redis_socket_p
                 while pos < len(line):
                     try:
                         logdata, pos = json_decoder.raw_decode(line, pos)
-                        # parsed_out_q.put(logdata, block=False)
-                        car2state = parse_simulator_logdata(logdata)
-                        for car_name, state in car2state.items():
-                            state_json = json.dumps(state).encode("utf-8")
-                            redis.hset(car_name, "simulator_state.json", state_json)
+                        new_state = parse_simulator_logdata(logdata)
+                        for car_name, state in new_state.items():
+                            crashed = state.pop("crashed", False)
+                            car2state[car_name].update(state)
+                            car2state[car_name]["crash_count"] += int(crashed)
+                            state_json = json.dumps(car2state[car_name])
+                            redis.hset(car_name, "simulator_state.json", state_json.encode("utf-8"))
                     except json.JSONDecodeError:
                         partial_msg = line[pos:]
                         break
@@ -104,7 +108,7 @@ class LogParser:
         self.log_parse_proc = Process(
                 name="simulator-log-parser",
                 target=log_parse_loop,
-                args=(name, self.stop_msg_q, simulator_spectator_url, redis_socket_path))
+                args=(self.stop_msg_q, simulator_spectator_url, redis_socket_path))
 
     def start(self):
         self.log_parse_proc.start()
