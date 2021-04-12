@@ -1,3 +1,6 @@
+"""
+Feature engineering, pre-, and post-processing, the reward function.
+"""
 import tensorflow as tf
 import numpy as np
 from scipy.ndimage import zoom

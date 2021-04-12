@@ -1,3 +1,6 @@
+"""
+Resource manager for simulator interactions.
+"""
 from collections import OrderedDict
 import json
 
@@ -14,8 +17,7 @@ def create_connections(car_socket_url, team_ids):
     connections = OrderedDict()
     for color_num, team_id in enumerate(team_ids):
         color = to_hex(cmap(color_num))
-        conn = connection.CarConnection(car_socket_url, team_id, team_id, color)
-        connections[team_id] = conn
+        connections[team_id] = connection.CarConnection(car_socket_url, team_id, team_id, color)
     return connections
 
 

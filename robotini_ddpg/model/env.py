@@ -1,6 +1,6 @@
 """
 Interface between the TensorFlow Agents framework and the Robotini racing environment.
-Allows TensorFlow agents to learn about and interact with the race car.
+Allows TensorFlow agents to interact with the race car.
 """
 import logging
 import time

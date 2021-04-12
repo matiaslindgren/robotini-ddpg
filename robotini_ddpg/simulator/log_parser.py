@@ -1,3 +1,8 @@
+"""
+Log parser for simulator JSON logs.
+Connects to the spectator socket and reads JSON objects in a child process.
+Selected events are extracted for each car and sent to Redis using the car id as key.
+"""
 from collections import defaultdict
 from multiprocessing import Process, Queue
 import json
@@ -92,32 +97,12 @@ def log_parse_loop(stop_msg, stop_msg_q, simulator_spectator_url, redis_socket_p
                         break
 
 
-def state_cache_loop(stop_msg, stop_msg_q, redis_socket_path, parsed_q):
-    signal.signal(signal.SIGINT, signal.SIG_IGN)
-    redis = Redis(unix_socket_path=redis_socket_path)
-    while True:
-        try:
-            if stop_msg_q.get(block=False) == stop_msg:
-                break
-        except queue.Empty:
-            pass
-        try:
-            logdata = parsed_q.get(block=False)
-            car2state = parse_simulator_logdata(logdata)
-            for car_name, state in car2state.items():
-                state_json = json.dumps(state).encode("utf-8")
-                redis.hset(car_name, "simulator_state.json", state_json)
-        except queue.Empty:
-            time.sleep(connection.TIMEOUT)
-
-
 class LogParser:
     def __init__(self, simulator_spectator_url, redis_socket_path):
         self.stop_msg_q = Queue()
         self.parsed_out_q = Queue()
-        name = "simulator-log-parser"
         self.log_parse_proc = Process(
-                name=name,
+                name="simulator-log-parser",
                 target=log_parse_loop,
                 args=(name, self.stop_msg_q, simulator_spectator_url, redis_socket_path))
 

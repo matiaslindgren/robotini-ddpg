@@ -1,3 +1,6 @@
+"""
+Hand-written policy based on RGB component values.
+"""
 import tensorflow as tf
 from tf_agents.policies import tf_policy
 from tf_agents.trajectories import policy_step

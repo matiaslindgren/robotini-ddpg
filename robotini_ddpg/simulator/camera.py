@@ -1,3 +1,7 @@
+"""
+Simulator camera frame reader.
+Most of the code is from the original Robotini Python template.
+"""
 import base64
 
 import cv2

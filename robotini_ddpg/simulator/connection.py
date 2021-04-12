@@ -1,3 +1,8 @@
+"""
+Connections between a car and the simulator.
+For sending actions and receiving camera frames.
+The communication loop runs in a child process.
+"""
 from multiprocessing import Process, Queue
 import queue
 import json
