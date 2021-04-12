@@ -19,7 +19,11 @@ def run(car_socket_url, log_socket_url, redis_socket_path, num_cars, num_episode
         batch_env = batched_py_environment.BatchedPyEnvironment(envs, multithreading=not isolate_envs)
         tf_env = tf_py_environment.TFPyEnvironment(batch_env, isolation=isolate_envs)
 
-        snail_policy = snail.BlueSnailPolicy(tf_env.time_step_spec(), tf_env.action_spec(), clip=False)
+        snail_policy = snail.BlueSnailPolicy(
+                tf_env.time_step_spec(),
+                tf_env.action_spec(),
+                constant_forward=0.06,
+                clip=False)
 
         avg_return = tf_metrics.AverageReturnMetric(batch_size=num_cars)
         observers = [avg_return]
@@ -33,11 +37,11 @@ def run(car_socket_url, log_socket_url, redis_socket_path, num_cars, num_episode
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--num-cars", type=int, default=3)
-    parser.add_argument("--num-episodes", type=int, default=3)
+    parser.add_argument("--car-socket-url", type=str, required=True)
+    parser.add_argument("--log-socket-url", type=str, required=True)
+    parser.add_argument("--redis-socket-path", type=str, required=True)
+    parser.add_argument("--num-cars", type=int, default=2)
+    parser.add_argument("--num-episodes", type=int, default=4)
     parser.add_argument("--isolate-envs", action="store_true", default=False)
-    parser.add_argument("car_socket_url", type=str)
-    parser.add_argument("log_socket_url", type=str)
-    parser.add_argument("redis_socket_path", type=str)
     args, sys.argv[1:] = parser.parse_known_args()
     run(**vars(args))
