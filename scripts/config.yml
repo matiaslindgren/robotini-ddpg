@@ -23,13 +23,13 @@ critic_output_fc_layers:
 - 50
 - 20
 
-cache_fill_episodes: 1
+cache_fill_episodes: 6
 
 batch_size: 64
-collect_episodes_per_iteration: 10
-initial_collect_episodes: 100
+collect_episodes_per_iteration: 6
+initial_collect_episodes: 24
 num_iterations: 200
-num_parallel_envs: 8
+num_parallel_envs: 6
 replay_buffer_capacity: 1000000
 train_sequence_length: 30
 train_steps_per_iteration: 100
@@ -47,7 +47,7 @@ use_tf_functions: true
 debug_summaries: true
 eval_interval: 500
 log_interval: 500
-num_eval_episodes: 5
+num_eval_episodes: 1
 save_interval: 3000
 summaries_flush_secs: 10
 summarize_grads_and_vars: true

@@ -154,36 +154,26 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
                 batch_size=train_env.batch_size,
                 max_length=conf.replay_buffer_capacity)
 
-        cache_fill_driver = dynamic_episode_driver.DynamicEpisodeDriver(
-                train_env,
-                snail.BlueSnailPolicy(
-                    train_env.time_step_spec(),
-                    train_env.action_spec(),
-                    constant_forward=0.05,
-                    clip=False),
-                num_episodes=conf.cache_fill_episodes*conf.num_parallel_envs)
-
         initial_collect_driver = dynamic_episode_driver.DynamicEpisodeDriver(
                 train_env,
                 initial_collect_policy,
                 observers=[replay_buffer.add_batch] + train_metrics,
-                num_episodes=conf.initial_collect_episodes*conf.num_parallel_envs)
+                num_episodes=conf.initial_collect_episodes)
 
         collect_driver = dynamic_episode_driver.DynamicEpisodeDriver(
                 train_env,
                 collect_policy,
                 observers=[replay_buffer.add_batch] + train_metrics,
-                num_episodes=conf.collect_episodes_per_iteration*conf.num_parallel_envs)
+                num_episodes=conf.collect_episodes_per_iteration)
 
         if conf.use_tf_functions:
             initial_collect_driver.run = common.function(initial_collect_driver.run)
-            cache_fill_driver.run = common.function(cache_fill_driver.run)
             collect_driver.run = common.function(collect_driver.run)
             tf_agent.train = common.function(tf_agent.train)
 
         logger.info("Filling simulator state caches for %d episodes in %d parallel environments",
                 conf.cache_fill_episodes, conf.num_parallel_envs)
-        cache_fill_driver.run()
+        snail.run_snail_in_envs([train_env, eval_env], conf.cache_fill_episodes)
 
         logger.info("Initializing replay buffer by collecting experience for %d episodes in %d parallel environments",
                 conf.initial_collect_episodes, conf.num_parallel_envs)
