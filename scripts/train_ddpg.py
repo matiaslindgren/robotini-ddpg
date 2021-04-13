@@ -1,4 +1,4 @@
-# Modified version of original file copied at 03/2021 from
+# Original file (accessed 03/2021):
 # https://github.com/tensorflow/agents/blob/v0.7.1/tf_agents/agents/ddpg/examples/v2/train_eval_rnn.py
 
 # License in original file:
@@ -21,30 +21,28 @@
 Training script for DDPG.
 """
 import argparse
-import functools
 import logging
 import os
 import sys
 import time
 
-import redis
-import yaml
-import tensorflow as tf    # pylint: disable=g-explicit-tensorflow-version-import
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+logger.addHandler(logging.StreamHandler())
 
-from tf_agents.agents.ddpg import actor_rnn_network, actor_network
-from tf_agents.agents.ddpg import critic_rnn_network, critic_network
+import yaml
+import tensorflow as tf
+
+from tf_agents.agents.ddpg import actor_rnn_network
+from tf_agents.agents.ddpg import critic_rnn_network
 from tf_agents.agents.ddpg import ddpg_agent
-from tf_agents.agents import Td3Agent
 from tf_agents.drivers import dynamic_episode_driver
-from tf_agents.environments import suite_dm_control
 from tf_agents.environments import tf_py_environment, batched_py_environment
-from tf_agents.environments import wrappers
 from tf_agents.eval import metric_utils
 from tf_agents.metrics import tf_metrics
-from tf_agents.policies import policy_saver, tf_py_policy
+from tf_agents.policies import policy_saver
 from tf_agents.replay_buffers import tf_uniform_replay_buffer
 from tf_agents.utils import common
-from tf_agents.system.system_multiprocessing import handle_main
 
 from robotini_ddpg.model import env, snail
 from robotini_ddpg.simulator import manager

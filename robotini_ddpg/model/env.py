@@ -48,33 +48,30 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
                 maximum=1,
                 name="observation")
         self._episode_ended = False
-        # Global state (within this environment) that persists across episodes
-        self.global_state = {
+        # Epoch state that persists across episodes for this environment, i.e. car
+        self.epoch_state = {
             "episode": 0,
             "lap_count": 0,
             "crash_count": 0,
             "track_segment": 0,
-            "prev_frames": [np.zeros(camera.frame_shape)],
-            "prev_sim_state": log_parser.to_numpy(log_parser.empty_state()),
+            "simulator_state": log_parser.to_numpy(log_parser.empty_state()),
         }
         # State that persists across steps but not episodes
         self.episode_state = self.zero_state()
 
     def zero_state(self):
-        g = self.global_state
+        epoch = self.epoch_state
         return {
             "step_num": 0,
-            "episode": g["episode"],
-            "track_segment": g["track_segment"],
+            "episode": epoch["episode"],
+            "track_segment": epoch["track_segment"],
             "distance": 0,
             "crash_count": 0,
-            "init_crash_count": g["crash_count"],
+            "init_crash_count": epoch["crash_count"],
             "return": 0,
             "lap_count": 0,
-            "init_lap_count": g["lap_count"],
+            "init_lap_count": epoch["lap_count"],
             "next_step_time": time.perf_counter(),
-            "prev_frames": g["prev_frames"],
-            "prev_sim_state": g["prev_sim_state"],
         }
 
     def empty_observation(self):
@@ -86,30 +83,31 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
     def observation_spec(self):
         return self._observation_spec
 
-    def get_state_snapshot(self, sim_state):
-        s = self.episode_state
-        g = self.global_state
-        x_img, y_img = features.observation_to_xy_images(s["observation"])
+    def get_state_snapshot(self, simulator_state):
+        episode = self.episode_state
+        epoch = self.epoch_state
+        sim = simulator_state
+        x_img, y_img = features.observation_to_xy_images(episode["observation"])
         return {
             "env_id": self.env_id,
-            "episode": g["episode"],
-            "original_frame": camera.frame_to_base64(s["original_frame"]),
+            "episode": epoch["episode"],
+            "original_frame": camera.frame_to_base64(episode["original_frame"]),
             "observation_x": camera.frame_to_base64(x_img),
             "observation_y": camera.frame_to_base64(y_img),
-            "step_num": int(s["step_num"]),
-            "speed": float(s["speed"]),
-            "action": s["action"].tolist(),
-            "return": float(s["return"]),
-            "distance": float(s["distance"]),
-            "position": sim_state["position"].tolist(),
-            "rotation": sim_state["rotation"].tolist(),
-            "track_angle": sim_state["track_angle"],
-            "track_segment": sim_state["track_segment"],
-            "lap_time": sim_state["lap_time"],
-            "lap_count": s["lap_count"],
-            "total_lap_count": g["lap_count"],
-            "total_crash_count": g["crash_count"],
-            "crash_count": s["crash_count"],
+            "step_num": int(episode["step_num"]),
+            "speed": float(episode["speed"]),
+            "action": episode["action"].tolist(),
+            "return": float(episode["return"]),
+            "distance": float(episode["distance"]),
+            "position": sim["position"].tolist(),
+            "rotation": sim["rotation"].tolist(),
+            "track_angle": sim["track_angle"],
+            "track_segment": sim["track_segment"],
+            "lap_time": sim["lap_time"],
+            "lap_count": episode["lap_count"],
+            "total_lap_count": epoch["lap_count"],
+            "total_crash_count": epoch["crash_count"],
+            "crash_count": episode["crash_count"],
         }
 
     def write_state_snapshot(self, data):
@@ -127,8 +125,6 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
 
     def terminate(self, observation, **ts_kwargs):
         self._episode_ended = True
-        for k in ("prev_frames", "prev_sim_state", "track_segment"):
-            self.global_state[k] = self.episode_state[k]
         self.episode_state = self.zero_state()
         return ts.termination(observation, **ts_kwargs)
 
@@ -136,48 +132,52 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
         if self._episode_ended:
             return self.reset()
 
-        s = self.episode_state
-        g = self.global_state
-        s["step_num"] += 1
-        s["next_step_time"] += self.step_interval_sec
+        episode = self.episode_state
+        epoch = self.epoch_state
+        episode["step_num"] += 1
+        episode["next_step_time"] += self.step_interval_sec
 
-        if s["step_num"] == 1:
-            g["episode"] += 1
-            logger.info("'%s' - begin episode %d", self.env_id, g["episode"])
+        if episode["step_num"] == 1:
+            epoch["episode"] += 1
+            logger.info("'%s' - begin episode %d", self.env_id, epoch["episode"])
 
         # Read car state and do action
         frames, sim_state = self.manager.get_car_state(self.env_id)
         self.do_action(action)
 
-        # If camera frames are empty, use previous values
-        frames = s["prev_frames"] = (frames or s["prev_frames"])
-        sim_state = s["prev_sim_state"] = (sim_state or s["prev_sim_state"])
+        # Use simulator state from previous step if got empty state
+        sim_state = epoch["simulator_state"] = (sim_state or epoch["simulator_state"])
 
-        # Feature extraction
+        # Extract model inputs from camera frame buffer
         frame, observation = features.camera_frames_to_observation(frames)
 
-        # Update state and compute reward
-        s["speed"] = np.linalg.norm(sim_state["velocity"])
-        s["action"] = action
-        s["observation"] = observation
-        s["original_frame"] = frame
-        s["distance"] += 0 if "position" not in s else minkowski(s["position"], sim_state["position"], 2)
-        s["position"] = sim_state["position"]
-        reward = features.reward(s, g, sim_state)
+        # Update state and compute reward for this step
+        episode["speed"] = np.linalg.norm(sim_state["velocity"])
+        episode["action"] = action
+        episode["observation"] = observation
+        episode["original_frame"] = frame
+        if "position" in episode:
+            episode["distance"] += minkowski(episode["position"], sim_state["position"], 2)
+        episode["position"] = sim_state["position"]
+        reward = features.reward(episode, epoch, sim_state)
 
-        # Write state snapshot to global cache (Redis)
-        s["return"] += reward
-        s["lap_count"] = sim_state["lap_count"] - s["init_lap_count"]
-        s["crash_count"] = sim_state["crash_count"] - s["init_crash_count"]
-        g["lap_count"] = sim_state["lap_count"]
-        g["crash_count"] = sim_state["crash_count"]
-        s["track_segment"] = sim_state["track_segment"]
+        # Update state for computing reward at next step
+        episode["return"] += reward
+        episode["lap_count"] = sim_state["lap_count"] - episode["init_lap_count"]
+        episode["crash_count"] = sim_state["crash_count"] - episode["init_crash_count"]
+        epoch["lap_count"] = sim_state["lap_count"]
+        epoch["crash_count"] = sim_state["crash_count"]
+        episode["track_segment"] = sim_state["track_segment"]
+
+        # Write JSON snapshot of current state into Redis
         self.write_state_snapshot(self.get_state_snapshot(sim_state))
 
-        if s["lap_count"] >= num_laps_per_episode:
+        # Terminate episode if car did enough laps
+        if episode["lap_count"] >= num_laps_per_episode:
             logger.info("'%s' - end episode at step %d: completed %d laps successfully",
-                    self.env_id, s["step_num"], s["lap_count"])
+                    self.env_id, episode["step_num"], episode["lap_count"])
             return self.terminate(observation, reward=reward)
 
-        sleep_until(s["next_step_time"])
+        # Still going, throttle FPS and transition to next step
+        sleep_until(episode["next_step_time"])
         return ts.transition(observation, reward=reward)

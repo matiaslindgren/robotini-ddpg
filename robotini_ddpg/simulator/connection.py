@@ -4,7 +4,7 @@ For sending actions and receiving camera frames.
 The communication loop runs in a child process.
 """
 from multiprocessing import Process, Queue
-import queue
+import contextlib
 import json
 import queue
 import signal
@@ -37,7 +37,7 @@ def send_json(sock, data):
 def communication_loop(stop_msg, simulator_url, login_cmds, frames, commands):
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     default_cmd = {"action": "forward", "value": 0}
-    with connect(simulator_url) as sock:
+    with contextlib.closing(connect(simulator_url)) as sock:
         for login_cmd in login_cmds:
             send_json(sock, login_cmd)
         sock.settimeout(TIMEOUT)
@@ -50,7 +50,6 @@ def communication_loop(stop_msg, simulator_url, login_cmds, frames, commands):
             try:
                 buf = camera.read_buffer(sock)
             except socket.timeout:
-                time.sleep(TIMEOUT)
                 continue
             frames.put(buf, block=False)
             sent_something = False
@@ -85,7 +84,7 @@ class CarConnection:
         self.proc.start()
 
     def stop(self):
-        self.stop_msg.put(True)
+        self.stop_msg.put(self.proc.name)
         self.proc.join(timeout=0.5)
         if self.proc.exitcode is None:
             print(self.proc.name, "did not terminate properly, killing process")

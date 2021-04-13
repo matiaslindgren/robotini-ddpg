@@ -5,6 +5,7 @@ Selected events are extracted for each car and sent to Redis using the car id as
 """
 from collections import defaultdict
 from multiprocessing import Process, Queue
+import contextlib
 import json
 import logging
 import math
@@ -70,7 +71,7 @@ def log_parse_loop(stop_msg_q, simulator_spectator_url, redis_socket_path):
     redis = Redis(unix_socket_path=redis_socket_path)
     json_decoder = json.JSONDecoder()
     car2state = defaultdict(empty_state)
-    with connection.connect(simulator_spectator_url) as sock:
+    with contextlib.closing(connection.connect(simulator_spectator_url)) as sock:
         partial_msg = ''
         while True:
             try:
@@ -89,16 +90,16 @@ def log_parse_loop(stop_msg_q, simulator_spectator_url, redis_socket_path):
                 while pos < len(line):
                     try:
                         logdata, pos = json_decoder.raw_decode(line, pos)
-                        new_state = parse_simulator_logdata(logdata)
-                        for car_name, state in new_state.items():
-                            crashed = state.pop("crashed", False)
-                            car2state[car_name].update(state)
-                            car2state[car_name]["crash_count"] += int(crashed)
-                            state_json = json.dumps(car2state[car_name])
-                            redis.hset(car_name, "simulator_state.json", state_json.encode("utf-8"))
                     except json.JSONDecodeError:
                         partial_msg = line[pos:]
                         break
+                    new_state = parse_simulator_logdata(logdata)
+                    for car_name, state in new_state.items():
+                        crashed = state.pop("crashed", False)
+                        car2state[car_name].update(state)
+                        car2state[car_name]["crash_count"] += int(crashed)
+                        state_json = json.dumps(car2state[car_name])
+                        redis.hset(car_name, "simulator_state.json", state_json.encode("utf-8"))
 
 
 class LogParser:

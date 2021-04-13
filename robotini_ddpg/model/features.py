@@ -1,5 +1,5 @@
 """
-Feature engineering, pre-, and post-processing, the reward function.
+Feature engineering, pre- and post-processing, and the reward function.
 """
 import tensorflow as tf
 import numpy as np
@@ -21,8 +21,38 @@ max_track_angle_penalty_threshold = 50.0
 class RewardWeight:
     speed = 0.1
     crash = 1.0
-    pass_segment = 1.0
+    track_segment_passed = 1.0
     wrong_direction = 0.5
+
+
+def reward(episode_state, epoch_state, simulator_state):
+    episode = episode_state
+    epoch = epoch_state
+    sim = simulator_state
+    total = 0.0
+
+    # More speed, more reward
+    total += RewardWeight.speed * (episode["speed"] - speed_penalty_threshold)
+
+    # Crash, penalty
+    if sim["crash_count"] > epoch["crash_count"]:
+        total -= RewardWeight.crash * crash_penalty
+
+    # Complete lap, big bonus
+    if sim["lap_count"] > epoch["lap_count"]:
+        # Slower lap => less bonus, clip at 1 second lap time (minimum/best possible)
+        lap_time_weight = 1.0 / np.sqrt(np.clip(sim["lap_time"], 1, None))
+        total += RewardWeight.track_segment_passed * lap_time_weight * complete_lap_bonus
+
+    # Complete track segment (not finish line), smol bonus
+    if sim["track_segment"] > episode["track_segment"] >= 0:
+        total += RewardWeight.track_segment_passed * complete_track_segment_bonus
+
+    # Too large deviation from correct direction, penalty
+    delta_track_angle = sim["track_angle"] - max_track_angle_penalty_threshold
+    total -= RewardWeight.wrong_direction * np.clip(delta_track_angle, 0, None)
+
+    return total
 
 
 def camera_frames_to_observation(frames):
@@ -38,34 +68,6 @@ def camera_frames_to_observation(frames):
     o = np.clip(o, 0, 1)
     assert not np.isnan(o).any(), "nan inputs"
     return frame, o
-
-
-def reward(episode_state, global_state, simulator_state):
-    s, g, sim = episode_state, global_state, simulator_state
-    total = 0.0
-
-    # More speed, more reward
-    total += RewardWeight.speed * (s["speed"] - speed_penalty_threshold)
-
-    # Crash, penalty
-    if sim["crash_count"] > g["crash_count"]:
-        total -= RewardWeight.crash * crash_penalty
-
-    # Complete lap, big bonus
-    if sim["lap_count"] > g["lap_count"]:
-        # Slower lap => less bonus, clip at 1 second lap time (minimum/best possible)
-        lap_time_weight = 1.0 / np.sqrt(np.clip(sim["lap_time"], 1, None))
-        total += RewardWeight.pass_segment * lap_time_weight * complete_lap_bonus
-
-    # Complete track segment (not finish line), smol bonus
-    if sim["track_segment"] > s["track_segment"] >= 0:
-        total += RewardWeight.pass_segment * complete_track_segment_bonus
-
-    # Too large deviation from correct direction, penalty
-    delta_track_angle = sim["track_angle"] - max_track_angle_penalty_threshold
-    total -= RewardWeight.wrong_direction * np.clip(delta_track_angle, 0, None)
-
-    return total
 
 
 def observation_to_xy_images(o, scale=10):
