@@ -38,30 +38,34 @@ def communication_loop(stop_msg, simulator_url, login_cmds, frames, commands):
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     default_cmd = {"action": "forward", "value": 0}
     with contextlib.closing(connect(simulator_url)) as sock:
-        for login_cmd in login_cmds:
-            send_json(sock, login_cmd)
-        sock.settimeout(TIMEOUT)
-        while True:
-            try:
-                if stop_msg.get(block=False):
-                    break
-            except queue.Empty:
-                pass
-            try:
-                buf = camera.read_buffer(sock)
-            except socket.timeout:
-                continue
-            frames.put(buf, block=False)
-            sent_something = False
+        try:
+            for login_cmd in login_cmds:
+                send_json(sock, login_cmd)
+            sock.settimeout(TIMEOUT)
             while True:
                 try:
-                    cmd = commands.get(block=False)
-                    send_json(sock, cmd)
-                    sent_something = True
+                    if stop_msg.get(block=False):
+                        break
                 except queue.Empty:
-                    break
-            if not sent_something:
-                send_json(sock, default_cmd)
+                    pass
+                try:
+                    buf = camera.read_buffer(sock)
+                except socket.timeout:
+                    continue
+                frames.put(buf, block=False)
+                sent_something = False
+                while True:
+                    try:
+                        cmd = commands.get(block=False)
+                        send_json(sock, cmd)
+                        sent_something = True
+                    except queue.Empty:
+                        break
+                if not sent_something:
+                    send_json(sock, default_cmd)
+        except Exception as e:
+            print("terminating communication_loop after unhandled exception:")
+            print(e)
 
 
 class CarConnection:

@@ -15,7 +15,7 @@ import socket
 import time
 
 import numpy as np
-from redis import Redis
+from redis import Redis, ConnectionError
 
 from robotini_ddpg.simulator import connection
 
@@ -72,34 +72,42 @@ def log_parse_loop(stop_msg_q, simulator_spectator_url, redis_socket_path):
     json_decoder = json.JSONDecoder()
     car2state = defaultdict(empty_state)
     with contextlib.closing(connection.connect(simulator_spectator_url)) as sock:
-        partial_msg = ''
-        while True:
-            try:
-                if stop_msg_q.get(block=False):
-                    break
-            except queue.Empty:
-                pass
-            msg = sock.recv(2048)
-            msg = partial_msg + msg.decode("utf-8")
+        try:
             partial_msg = ''
-            for line in msg.split('\n'):
-                line = line.strip()
-                if not line:
-                    continue
-                pos = 0
-                while pos < len(line):
-                    try:
-                        logdata, pos = json_decoder.raw_decode(line, pos)
-                    except json.JSONDecodeError:
-                        partial_msg = line[pos:]
+            while True:
+                try:
+                    if stop_msg_q.get(block=False):
                         break
-                    new_state = parse_simulator_logdata(logdata)
-                    for car_name, state in new_state.items():
-                        crashed = state.pop("crashed", False)
-                        car2state[car_name].update(state)
-                        car2state[car_name]["crash_count"] += int(crashed)
-                        state_json = json.dumps(car2state[car_name])
-                        redis.hset(car_name, "simulator_state.json", state_json.encode("utf-8"))
+                except queue.Empty:
+                    pass
+                msg = sock.recv(2048)
+                msg = partial_msg + msg.decode("utf-8")
+                partial_msg = ''
+                for line in msg.split('\n'):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    pos = 0
+                    while pos < len(line):
+                        try:
+                            logdata, pos = json_decoder.raw_decode(line, pos)
+                        except json.JSONDecodeError:
+                            partial_msg = line[pos:]
+                            break
+                        new_state = parse_simulator_logdata(logdata)
+                        for car_name, state in new_state.items():
+                            crashed = state.pop("crashed", False)
+                            car2state[car_name].update(state)
+                            car2state[car_name]["crash_count"] += int(crashed)
+                            state_json = json.dumps(car2state[car_name])
+                            try:
+                                redis.hset(car_name, "simulator_state.json", state_json.encode("utf-8"))
+                            except ConnectionError:
+                                print("redis connection error, terminating loop")
+                                return
+        except Exception as e:
+            print("terminating log_parse_loop after unhandled exception:")
+            print(e)
 
 
 class LogParser:

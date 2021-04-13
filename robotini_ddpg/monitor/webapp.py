@@ -5,6 +5,7 @@ import time
 
 from flask import Flask, render_template, Response
 from redis import Redis
+from redis.exceptions import ConnectionError
 
 from robotini_ddpg.util import sleep_until
 
@@ -17,9 +18,13 @@ def run(fps_limit, redis_socket_path, monitored_team_ids, host, port):
         next_frame = time.perf_counter()
         while True:
             next_frame += 1/fps_limit
-            state_json = redis.hget(team_id, "state_snapshot.json")
-            if state_json:
-                yield state_json + b"\r\n"
+            try:
+                state_json = redis.hget(team_id, "state_snapshot.json")
+                if state_json:
+                    yield state_json + b"\r\n"
+            except ConnectionError:
+                print("redis connection error, sleeping for 3 secs")
+                next_frame += 3
             sleep_until(next_frame)
 
     @app.route("/")
