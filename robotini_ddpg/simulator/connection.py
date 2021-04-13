@@ -91,12 +91,6 @@ class CarConnection:
             self.proc.terminate()
 
     def read_camera_frames(self):
-        """
-        Read all available camera frames from the buffer.
-        Blocks until next frame is available, thus always returning at least one frame.
-        """
-        buf = self.frame_queue.get(block=True)
-        yield camera.buffer_to_frame(buf)
         while True:
             try:
                 buf = self.frame_queue.get(block=False)

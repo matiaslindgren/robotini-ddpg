@@ -50,6 +50,7 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
             "lap_count": 0,
             "crash_count": 0,
             "track_segment": 0,
+            "frames": [np.zeros(camera.frame_shape)],
             "simulator_state": log_parser.to_numpy(log_parser.empty_state()),
         }
         # State that persists across steps but not episodes
@@ -141,7 +142,8 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
         frames, sim_state = self.manager.get_car_state(self.env_id)
         self.do_action(action)
 
-        # Use simulator state from previous step if got empty state
+        # Use camera frames and simulator state from previous step if new values are empty
+        frames = epoch["frames"] = (frames or epoch["frames"])
         sim_state = epoch["simulator_state"] = (sim_state or epoch["simulator_state"])
 
         # Extract model inputs from camera frame buffer
