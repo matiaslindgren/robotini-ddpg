@@ -33,8 +33,8 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
         self._action_spec = array_spec.BoundedArraySpec(
                 shape=[2],
                 dtype=np.float32,
-                minimum=[0.1, -0.5],
-                maximum=[0.3, 0.5],
+                minimum=[0.001, -0.5],
+                maximum=[0.4, 0.5],
                 name="forward_and_turn")
         # Neural network inputs
         self._observation_spec = array_spec.BoundedArraySpec(
