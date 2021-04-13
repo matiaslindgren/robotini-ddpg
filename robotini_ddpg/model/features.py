@@ -12,15 +12,15 @@ from robotini_ddpg.simulator.camera import rgb_idx
 n_x = n_y = 3
 observation_shape = (n_x+n_y, 3)
 
-speed_penalty_threshold = 2.0
-complete_lap_bonus = 20.0
-complete_track_segment_bonus = 2.0
-crash_penalty = 5.0
+speed_penalty_threshold = 1.0
+complete_lap_bonus = 25.0
+complete_track_segment_bonus = 30.0
+crash_penalty = 30.0
 max_track_angle = 90.0
 
 class RewardWeight:
     speed = 0.5
-    crash = 0.5
+    crash = 1.0
     track_segment_passed = 1.0
     wrong_direction = 4.0
 
