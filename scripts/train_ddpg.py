@@ -26,7 +26,7 @@ import os
 import sys
 import time
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 logger.addHandler(logging.StreamHandler())
 
@@ -133,9 +133,9 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
                 train_step_counter=global_step)
         tf_agent.initialize()
 
-        logging.info("actor net")
+        logger.info("actor net")
         actor_net.summary(print_fn=logging.info)
-        logging.info("critic net")
+        logger.info("critic net")
         critic_net.summary(print_fn=logging.info)
 
         train_metrics = [
@@ -181,11 +181,11 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
             collect_driver.run = common.function(collect_driver.run)
             tf_agent.train = common.function(tf_agent.train)
 
-        logging.info("Filling simulator state caches for %d episodes in %d parallel environments",
+        logger.info("Filling simulator state caches for %d episodes in %d parallel environments",
                 conf.cache_fill_episodes, conf.num_parallel_envs)
         cache_fill_driver.run()
 
-        logging.info("Initializing replay buffer by collecting experience for %d episodes in %d parallel environments",
+        logger.info("Initializing replay buffer by collecting experience for %d episodes in %d parallel environments",
                 conf.initial_collect_episodes, conf.num_parallel_envs)
         initial_collect_driver.run()
 
@@ -220,7 +220,7 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
         eval_policy_saver = policy_saver.PolicySaver(eval_policy, batch_size=eval_env.batch_size)
 
         for iteration in range(1, conf.num_iterations+1):
-            logging.info("Iteration %d - Collecting experience for %d episodes in %d parallel environments",
+            logger.info("Iteration %d - Collecting experience for %d episodes in %d parallel environments",
                     iteration, conf.collect_episodes_per_iteration, conf.num_parallel_envs)
             start_time = time.time()
             time_step, policy_state = collect_driver.run(
@@ -228,19 +228,19 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
                     policy_state=policy_state,
             )
 
-            logging.info("Iteration %d - Training", iteration)
+            logger.info("Iteration %d - Training", iteration)
             for _ in range(conf.train_steps_per_iteration):
                 train_loss = train_step()
 
-            logging.info("Iteration %d - Evaluating", iteration)
+            logger.info("Iteration %d - Evaluating", iteration)
 
             time_acc += time.time() - start_time
 
             if global_step.numpy() % conf.log_interval == 0:
-                logging.info('step = %d, loss = %f', global_step.numpy(),
+                logger.info('step = %d, loss = %f', global_step.numpy(),
                                          train_loss.loss)
                 steps_per_sec = (global_step.numpy() - timed_at_step) / time_acc
-                logging.info('%.3f steps/sec', steps_per_sec)
+                logger.info('%.3f steps/sec', steps_per_sec)
                 tf.compat.v2.summary.scalar(
                         name='global_steps_per_sec', data=steps_per_sec, step=global_step)
                 timed_at_step = global_step.numpy()
@@ -264,7 +264,7 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
 
             if global_step.numpy() % conf.save_interval == 0:
                 save_path = os.path.join(policy_dir, "policy_step{:d}".format(global_step.numpy()))
-                logging.info("saving policy to '%s'", save_path)
+                logger.info("saving policy to '%s'", save_path)
                 eval_policy_saver.save(save_path)
 
 

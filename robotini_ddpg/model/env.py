@@ -6,10 +6,6 @@ import logging
 import time
 import json
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-logger.addHandler(logging.StreamHandler())
-
 from redis import Redis
 import numpy as np
 from scipy.spatial.distance import minkowski
@@ -139,7 +135,7 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
 
         if episode["step_num"] == 1:
             epoch["episode"] += 1
-            logger.info("'%s' - begin episode %d", self.env_id, epoch["episode"])
+            logging.info("'%s' - begin episode %d", self.env_id, epoch["episode"])
 
         # Read car state and do action
         frames, sim_state = self.manager.get_car_state(self.env_id)
@@ -174,7 +170,7 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
 
         # Terminate episode if car did enough laps
         if episode["lap_count"] >= num_laps_per_episode:
-            logger.info("'%s' - end episode at step %d: completed %d laps successfully",
+            logging.info("'%s' - end episode at step %d after %d completed laps",
                     self.env_id, episode["step_num"], episode["lap_count"])
             return self.terminate(observation, reward=reward)
 
