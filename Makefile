@@ -13,28 +13,24 @@ CONFIG_PATH := ./scripts/config.yml
 
 TF_CPP_MIN_LOG_LEVEL := 1
 
-export TF_CPP_MIN_LOG_LEVEL PYTHON_BIN
+export TF_CPP_MIN_LOG_LEVEL PYTHON_BIN REDIS_SOCKET
 
-.PHONY: clean start_redis start_monitor env_demo train_ddpg start_tensorboard
+.PHONY: clean start_monitor env_demo train_ddpg start_tensorboard
 
 clean:
-	redis-cli -s $(REDIS_SOCKET) flushall
 	rm -rv $(CACHE_DIR)
-
-start_redis:
-	redis-server --unixsocket $(REDIS_SOCKET) --save "" --maxmemory 100mb --port 0
 
 start_monitor:
 	$(PYTHON_BIN) robotini_ddpg/monitor/webapp.py $(REDIS_SOCKET) $(MONITORED_TEAM_IDS)
 
 env_demo:
-	$(PYTHON_BIN) scripts/env_demo.py \
+	./scripts/with_redis.bash $(PYTHON_BIN) scripts/env_demo.py \
 		--car-socket-url $(CAR_SOCKET_URL) \
 		--log-socket-url $(LOG_SOCKET_URL) \
 		--redis-socket-path $(REDIS_SOCKET)
 
 train_ddpg:
-	$(PYTHON_BIN) scripts/train_ddpg.py \
+	./scripts/with_redis.bash $(PYTHON_BIN) scripts/train_ddpg.py \
 		--car-socket-url $(CAR_SOCKET_URL) \
 		--log-socket-url $(LOG_SOCKET_URL) \
 		--redis-socket-path $(REDIS_SOCKET) \
