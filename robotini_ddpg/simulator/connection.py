@@ -36,7 +36,7 @@ def send_json(sock, data):
 
 def communication_loop(stop_msg, simulator_url, login_cmds, frames, commands):
     signal.signal(signal.SIGINT, signal.SIG_IGN)
-    default_cmd = {"action": "forward", "value": 0}
+    default_cmd = {"action": "forward", "value": 1e-4}
     with contextlib.closing(connect(simulator_url)) as sock:
         try:
             for login_cmd in login_cmds:

@@ -23,13 +23,13 @@ critic_output_fc_layers:
 - 50
 - 20
 
-cache_fill_episodes: 6
+cache_fill_episodes: 4
 
 batch_size: 64
-collect_episodes_per_iteration: 6
-initial_collect_episodes: 24
+collect_episodes_per_iteration: 4
+initial_collect_episodes: 12
 num_iterations: 200
-num_parallel_envs: 6
+num_parallel_envs: 4
 replay_buffer_capacity: 1000000
 train_sequence_length: 30
 train_steps_per_iteration: 100

@@ -16,13 +16,13 @@ speed_penalty_threshold = 2.0
 complete_lap_bonus = 20.0
 complete_track_segment_bonus = 2.0
 crash_penalty = 5.0
-max_track_angle_penalty_threshold = 50.0
+max_track_angle = 90.0
 
 class RewardWeight:
-    speed = 0.1
-    crash = 1.0
+    speed = 0.5
+    crash = 0.5
     track_segment_passed = 1.0
-    wrong_direction = 0.5
+    wrong_direction = 4.0
 
 
 def reward(episode_state, epoch_state, simulator_state):
@@ -41,7 +41,7 @@ def reward(episode_state, epoch_state, simulator_state):
     # Complete lap, big bonus
     if sim["lap_count"] > epoch["lap_count"]:
         # Slower lap => less bonus, clip at 1 second lap time (minimum/best possible)
-        lap_time_weight = 1.0 / np.sqrt(np.clip(sim["lap_time"], 1, None))
+        lap_time_weight = 1.0 / np.clip(sim["lap_time"], 1, None)
         total += RewardWeight.track_segment_passed * lap_time_weight * complete_lap_bonus
 
     # Complete track segment (not finish line), smol bonus
@@ -49,7 +49,7 @@ def reward(episode_state, epoch_state, simulator_state):
         total += RewardWeight.track_segment_passed * complete_track_segment_bonus
 
     # Too large deviation from correct direction, penalty
-    delta_track_angle = sim["track_angle"] - max_track_angle_penalty_threshold
+    delta_track_angle = (sim["track_angle"] - max_track_angle) / max_track_angle
     total -= RewardWeight.wrong_direction * np.clip(delta_track_angle, 0, None)
 
     return total
@@ -78,16 +78,15 @@ def observation_to_xy_images(o, scale=10):
     return x_img, y_img
 
 
-def color_component_mass(color, c):
-    total = tf.reduce_sum(color, axis=[1, 2])
-    mass = total - tf.reduce_sum(color[:,:,c], axis=1)
-    return tf.clip_by_value(mass, 0, 100)
+def component_sum(v, c):
+    s = tf.reduce_sum(v[:,:,c], axis=1)
+    return tf.clip_by_value(s, 0, 100)
 
 
 def turn_from_color_mass(observation):
     y = observation[:,n_x:]
-    yr = color_component_mass(y, rgb_idx.R)
-    yg = color_component_mass(y, rgb_idx.G)
-    yb = color_component_mass(y, rgb_idx.B)
-    turn = (yr - yg)/tf.clip_by_value(yb, 0.01, 10)
+    yr = component_sum(y, rgb_idx.R)
+    yg = component_sum(y, rgb_idx.G)
+    yb = component_sum(y, rgb_idx.B)
+    turn = (yg - yr)/tf.clip_by_value(yb, 0.01, 10)
     return turn
