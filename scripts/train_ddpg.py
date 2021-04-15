@@ -36,7 +36,7 @@ import tensorflow as tf
 from tf_agents.agents.ddpg import actor_rnn_network
 from tf_agents.agents.ddpg import critic_rnn_network
 from tf_agents.agents.ddpg import ddpg_agent
-from tf_agents.drivers import dynamic_episode_driver
+from tf_agents.drivers import dynamic_step_driver
 from tf_agents.environments import tf_py_environment, batched_py_environment
 from tf_agents.eval import metric_utils
 from tf_agents.metrics import tf_metrics
@@ -71,27 +71,22 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
             tf_metrics.AverageEpisodeLengthMetric(buffer_size=conf.num_eval_episodes)
     ]
 
-    train_team_ids = ["env{}_train".format(i) for i in range(1, conf.num_parallel_envs+1)]
-    eval_id = "env{}_eval".format(len(train_team_ids)+1)
+    train_team_ids = ["env{}".format(i) for i in range(1, conf.num_parallel_envs+1)]
+    eval_id = "env{}".format(len(train_team_ids)+1)
 
     print("agent monitor webapp startup command:\n\n"
           "{:s} robotini_ddpg/monitor/webapp.py {:s} {:s}\n\n".format(
               os.environ["PYTHON_BIN"], redis_socket_path, ' '.join(train_team_ids + [eval_id])))
 
     global_step = tf.compat.v1.train.get_or_create_global_step()
-    with (tf.compat.v2.summary.record_if(lambda: tf.math.equal(global_step % conf.summary_interval, 0)),
-          manager.SimulatorManager(
-              train_team_ids + [eval_id],
-              car_socket_url,
-              log_socket_url,
-              redis_socket_path) as simulator_manager):
-        train_envs = [env.RobotiniCarEnv(simulator_manager, team_id, redis_socket_path)
-                      for team_id in train_team_ids]
-        train_env = batched_py_environment.BatchedPyEnvironment(train_envs, multithreading=True)
+    with tf.compat.v2.summary.record_if(lambda: tf.math.equal(global_step % conf.summary_interval, 0)):
+        train_pyenvs = [env.RobotiniCarEnv(team_id, redis_socket_path)
+                        for team_id in train_team_ids]
+        train_env = batched_py_environment.BatchedPyEnvironment(train_pyenvs, multithreading=True)
         train_env = tf_py_environment.TFPyEnvironment(train_env, isolation=False)
 
-        eval_env = env.RobotiniCarEnv(simulator_manager, eval_id, redis_socket_path)
-        eval_env = tf_py_environment.TFPyEnvironment(eval_env, isolation=False)
+        eval_pyenv = env.RobotiniCarEnv(eval_id, redis_socket_path)
+        eval_env = tf_py_environment.TFPyEnvironment(eval_pyenv, isolation=False)
 
         actor_net = actor_rnn_network.ActorRnnNetwork(
                 train_env.time_step_spec().observation,
@@ -154,38 +149,33 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
                 batch_size=train_env.batch_size,
                 max_length=conf.replay_buffer_capacity)
 
-        initial_collect_driver = dynamic_episode_driver.DynamicEpisodeDriver(
+        initial_collect_driver = dynamic_step_driver.DynamicStepDriver(
                 train_env,
                 initial_collect_policy,
                 observers=[replay_buffer.add_batch] + train_metrics,
-                num_episodes=conf.initial_collect_episodes)
+                num_steps=conf.initial_collect_steps)
 
-        collect_driver = dynamic_episode_driver.DynamicEpisodeDriver(
+        collect_driver = dynamic_step_driver.DynamicStepDriver(
                 train_env,
                 collect_policy,
                 observers=[replay_buffer.add_batch] + train_metrics,
-                num_episodes=conf.collect_episodes_per_iteration)
+                num_steps=conf.collect_steps_per_iteration)
 
         if conf.use_tf_functions:
             initial_collect_driver.run = common.function(initial_collect_driver.run)
             collect_driver.run = common.function(collect_driver.run)
             tf_agent.train = common.function(tf_agent.train)
 
-        logger.info("Filling simulator state caches for %d episodes in %d parallel environments",
-                conf.cache_fill_episodes, conf.num_parallel_envs)
-        snail.run_snail_in_envs([train_env, eval_env], conf.cache_fill_episodes)
+        socket_conf = [car_socket_url, log_socket_url, redis_socket_path]
 
-        logger.info("Initializing replay buffer by collecting experience for %d episodes in %d parallel environments",
-                conf.initial_collect_episodes, conf.num_parallel_envs)
-        initial_collect_driver.run()
-
-        results = metric_utils.compute(
-                eval_metrics,
-                eval_env,
-                eval_policy,
-                num_episodes=conf.num_eval_episodes,
-        )
-        metric_utils.log_metrics(eval_metrics)
+        car_suffix = "init_experience"
+        with manager.SimulatorManager(train_pyenvs, car_suffix, *socket_conf) as simulator_manager:
+            logger.info("Filling simulator state caches for %d steps in %d parallel environments",
+                    conf.cache_fill_steps, conf.num_parallel_envs)
+            snail.run_snail_in_envs([train_env], max_steps=1000*conf.num_parallel_envs)
+            logger.info("Initializing replay buffer by collecting experience for %d steps in %d parallel environments",
+                    conf.initial_collect_steps, conf.num_parallel_envs)
+            initial_collect_driver.run()
 
         time_step = None
         policy_state = collect_policy.get_initial_state(train_env.batch_size)
@@ -201,8 +191,8 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
         iterator = iter(dataset)
 
         def train_step():
-            experience, _ = next(iterator)
-            return tf_agent.train(experience)
+            experience_batch, _ = next(iterator)
+            return tf_agent.train(experience_batch)
 
         if conf.use_tf_functions:
             train_step = common.function(train_step)
@@ -210,13 +200,19 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
         eval_policy_saver = policy_saver.PolicySaver(eval_policy, batch_size=eval_env.batch_size)
 
         for iteration in range(1, conf.num_iterations+1):
-            logger.info("Iteration %d - Collecting experience for %d episodes in %d parallel environments",
-                    iteration, conf.collect_episodes_per_iteration, conf.num_parallel_envs)
+            car_suffix = "iteration{:d}".format(iteration)
+
             start_time = time.time()
-            time_step, policy_state = collect_driver.run(
-                    time_step=time_step,
-                    policy_state=policy_state,
-            )
+            with manager.SimulatorManager(train_pyenvs, car_suffix, *socket_conf) as simulator_manager:
+                logger.info("Filling simulator state caches for %d steps in %d parallel environments",
+                        conf.cache_fill_steps, conf.num_parallel_envs)
+                snail.run_snail_in_envs([train_env], max_steps=1000*conf.num_parallel_envs)
+                logger.info("Iteration %d - Collecting experience for %d steps in %d parallel environments",
+                        iteration, conf.collect_steps_per_iteration, conf.num_parallel_envs)
+                time_step, policy_state = collect_driver.run(
+                        time_step=time_step,
+                        policy_state=policy_state,
+                )
 
             logger.info("Iteration %d - Training", iteration)
             for _ in range(conf.train_steps_per_iteration):
@@ -241,15 +237,17 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
                         train_step=global_step, step_metrics=train_metrics[:2])
 
             if global_step.numpy() % conf.eval_interval == 0:
-                results = metric_utils.compute(
-                        eval_metrics,
-                        eval_env,
-                        eval_policy,
-                        num_episodes=conf.num_eval_episodes,
-                        # train_step=global_step,
-                        # summary_writer=eval_summary_writer,
-                        # summary_prefix='Metrics',
-                )
+                with manager.SimulatorManager([eval_pyenv], car_suffix + "_evaluation", *socket_conf) as simulator_manager:
+                    snail.run_snail_in_envs([eval_env], max_steps=1000)
+                    _ = metric_utils.compute(
+                            eval_metrics,
+                            eval_env,
+                            eval_policy,
+                            num_episodes=conf.num_eval_episodes,
+                            # train_step=global_step,
+                            # summary_writer=eval_summary_writer,
+                            # summary_prefix='Metrics',
+                    )
                 metric_utils.log_metrics(eval_metrics)
 
             if global_step.numpy() % conf.save_interval == 0:

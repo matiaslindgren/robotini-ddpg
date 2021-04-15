@@ -30,6 +30,7 @@ def empty_state():
         "crash_count": 0,
         "lap_time": 0,
         "lap_count": 0,
+        # "is_empty": True,
     }
 
 
@@ -68,9 +69,14 @@ def parse_simulator_logdata(sim_data):
 
 def log_parse_loop(stop_msg_q, simulator_spectator_url, redis_socket_path):
     signal.signal(signal.SIGINT, signal.SIG_IGN)
+
     redis = Redis(unix_socket_path=redis_socket_path)
-    json_decoder = json.JSONDecoder()
     car2state = defaultdict(empty_state)
+    def should_delete(car_id):
+        return redis.hget(car_id, "is_destroyed") and car_id in car2state
+
+    json_decoder = json.JSONDecoder()
+    recv_buf_size = 2*1024
     with contextlib.closing(connection.connect(simulator_spectator_url)) as sock:
         try:
             partial_msg = ''
@@ -80,7 +86,10 @@ def log_parse_loop(stop_msg_q, simulator_spectator_url, redis_socket_path):
                         break
                 except queue.Empty:
                     pass
-                msg = sock.recv(2048)
+                # for car_id in list(car2state):
+                    # if should_delete(car_id):
+                        # del car2state[car_id]
+                msg = sock.recv(recv_buf_size)
                 msg = partial_msg + msg.decode("utf-8")
                 partial_msg = ''
                 for line in msg.split('\n'):
@@ -95,19 +104,23 @@ def log_parse_loop(stop_msg_q, simulator_spectator_url, redis_socket_path):
                             partial_msg = line[pos:]
                             break
                         new_state = parse_simulator_logdata(logdata)
-                        for car_name, state in new_state.items():
+                        for car_id, state in new_state.items():
+                            # if should_delete(car_id):
+                                # del car2state[car_id]
+                                # continue
+                            # car2state[car_id]["is_empty"] = False
                             crashed = state.pop("crashed", False)
-                            car2state[car_name].update(state)
-                            car2state[car_name]["crash_count"] += int(crashed)
-                            state_json = json.dumps(car2state[car_name])
+                            car2state[car_id].update(state)
+                            car2state[car_id]["crash_count"] += int(crashed)
+                            state_json = json.dumps(car2state[car_id])
                             try:
-                                redis.hset(car_name, "simulator_state.json", state_json.encode("utf-8"))
+                                redis.hset(car_id, "simulator_state.json", state_json.encode("utf-8"))
                             except ConnectionError:
                                 print("redis connection error, terminating loop")
                                 return
         except Exception as e:
             print("terminating log_parse_loop after unhandled exception:")
-            print(e)
+            print(repr(e))
 
 
 class LogParser:

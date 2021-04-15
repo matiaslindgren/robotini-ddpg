@@ -19,13 +19,13 @@ from robotini_ddpg.simulator import camera, log_parser
 
 
 fps_limit = 60
-num_laps_per_episode = 1
+num_laps_per_episode = 2
 
 
 class RobotiniCarEnv(py_environment.PyEnvironment):
 
-    def __init__(self, manager, env_id, redis_socket_path):
-        self.manager = manager
+    def __init__(self, env_id, redis_socket_path):
+        self.manager = None
         self.env_id = env_id
         self.redis = Redis(unix_socket_path=redis_socket_path)
         self.step_interval_sec = 1.0/fps_limit
@@ -33,7 +33,7 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
         self._action_spec = array_spec.BoundedArraySpec(
                 shape=[2],
                 dtype=np.float32,
-                minimum=[0.01, -0.5],
+                minimum=[0.03, -0.5],
                 maximum=[0.4, 0.5],
                 name="forward_and_turn")
         # Neural network inputs
@@ -117,8 +117,8 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
         return ts.restart(self.empty_observation())
 
     def do_action(self, action):
-        self.manager.send_action(self.env_id, "forward", float(action[0]))
-        self.manager.send_action(self.env_id, "turn", float(action[1]))
+        self.manager.send_command(self.env_id, {"action": "forward", "value": float(action[0])})
+        self.manager.send_command(self.env_id, {"action": "turn", "value": float(action[1])})
 
     def terminate(self, observation, **ts_kwargs):
         self._episode_ended = True
@@ -158,6 +158,7 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
             episode["distance"] += minkowski(episode["position"], sim_state["position"], 2)
         episode["position"] = sim_state["position"]
         reward = features.reward(episode, epoch, sim_state)
+        crashed = sim_state["crash_count"] > epoch["crash_count"]
 
         # Update state for computing reward at next step
         episode["return"] += reward
@@ -175,6 +176,10 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
             logging.info("'%s' - end episode at step %d after %d completed laps",
                     self.env_id, episode["step_num"], episode["lap_count"])
             return self.terminate(observation, reward=reward)
+        if episode["step_num"] > 20 and crashed:
+            logging.info("'%s' - end episode at step %d, car crashed",
+                    self.env_id, episode["step_num"])
+            return self.terminate(observation, reward=-100)
 
         # Still going, throttle FPS and transition to next step
         sleep_until(episode["next_step_time"])

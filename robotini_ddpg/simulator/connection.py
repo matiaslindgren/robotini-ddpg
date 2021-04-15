@@ -34,46 +34,54 @@ def send_json(sock, data):
     assert err is None, "failed sock.sendall '{:s}', with msg of length {:d}".format(err, len(msg))
 
 
-def communication_loop(stop_msg, simulator_url, login_cmds, frames, commands):
+def communication_loop(stop_msg_q, simulator_url, login_cmds, frames, commands):
     signal.signal(signal.SIGINT, signal.SIG_IGN)
-    default_cmd = {"action": "forward", "value": 1e-4}
+    def false_until_stop():
+        while True:
+            try:
+                if stop_msg_q.get(block=False):
+                    break
+            except queue.Empty:
+                pass
+            yield False
+        while True:
+            yield True
+    stop_msg = false_until_stop()
     with contextlib.closing(connect(simulator_url)) as sock:
         try:
             for login_cmd in login_cmds:
                 send_json(sock, login_cmd)
             sock.settimeout(TIMEOUT)
-            while True:
-                try:
-                    if stop_msg.get(block=False):
-                        break
-                except queue.Empty:
-                    pass
+            while not next(stop_msg):
                 try:
                     buf = camera.read_buffer(sock)
                 except socket.timeout:
                     continue
+                except Exception as e:
+                    print("unexpected exception during camera read:")
+                    print(repr(e))
+                    continue
                 frames.put(buf, block=False)
-                sent_something = False
-                while True:
+                k = False
+                while not next(stop_msg):
                     try:
                         cmd = commands.get(block=False)
                         send_json(sock, cmd)
-                        sent_something = True
+                        k = True
                     except queue.Empty:
                         break
-                if not sent_something:
-                    send_json(sock, default_cmd)
+                if not k:
+                    send_json(sock, {"action": "forward", "value": 0})
         except Exception as e:
             print("terminating communication_loop after unhandled exception:")
-            print(e)
+            print(repr(e))
 
 
 class CarConnection:
-
-    def __init__(self, simulator_url, car_name, team_id, car_color):
-        self.car_id = team_id if car_name == team_id else team_id + "_" + car_name
+    def __init__(self, simulator_url, car_id, car_color, team_id):
+        self.car_id = car_id
         login_cmds = [
-            {"name": car_name, "teamId": team_id, "color": car_color},
+            {"name": self.car_id, "teamId": team_id, "color": car_color},
             {"move": True},
         ]
         self.stop_msg = Queue()
@@ -88,6 +96,8 @@ class CarConnection:
         self.proc.start()
 
     def stop(self):
+        if not self.proc.is_alive():
+            return
         self.stop_msg.put(self.proc.name)
         self.proc.join(timeout=0.5)
         if self.proc.exitcode is None:
@@ -95,12 +105,14 @@ class CarConnection:
             self.proc.terminate()
 
     def read_camera_frames(self):
+        timeout = 2
         while True:
             try:
-                buf = self.frame_queue.get(block=False)
+                buf = self.frame_queue.get(block=timeout > 0, timeout=timeout)
                 yield camera.buffer_to_frame(buf)
+                timeout = 0
             except queue.Empty:
                 return
 
-    def action(self, key, value):
-        self.cmd_queue.put({"action": key, "value": value}, block=False)
+    def send_command(self, cmd):
+        self.cmd_queue.put(cmd, block=False)
