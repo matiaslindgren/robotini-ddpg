@@ -45,7 +45,7 @@ def reward(episode_state, epoch_state, simulator_state):
     #     total += RewardWeight.track_segment_passed * lap_time_weight * complete_lap_bonus
 
     # track_segment will be negative just after the car spawns until it passes the next segment
-    if sim["track_segment"] > 0:
+    if sim["track_segment"] >= 0:
         # Complete track segment (not finish line), smol bonus
         if sim["track_segment"] > episode["track_segment"] >= 0:
             total += RewardWeight.track_segment_passed * complete_track_segment_bonus
