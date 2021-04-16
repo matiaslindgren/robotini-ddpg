@@ -12,19 +12,25 @@ from matplotlib.colors import to_hex
 from . import connection, camera, log_parser
 
 
+def teams_from_envs(envs, car_socket_url):
+    cmap = get_cmap("tab20")
+    for i, env in enumerate(envs):
+        car_color = to_hex(cmap(i))
+        yield Team(env, car_color, car_socket_url)
+
+
 class Team:
-    def __init__(self, env, car_suffix, color, car_socket_url):
+    def __init__(self, env, color, car_socket_url):
         self.env = env
         self.color = color
         self.car_socket_url = car_socket_url
         self.car = None
-        self.car_suffix = car_suffix
 
-    def new_car(self):
+    def new_car(self, car_name_suffix):
         assert not self.car, "team {} already has car {}".format(self.env.env_id, self.car.car_id)
         self.car = connection.CarConnection(
                 self.car_socket_url,
-                self.env.env_id + "_" + self.car_suffix,
+                self.env.env_id + "_" + car_name_suffix,
                 self.color,
                 self.env.env_id)
         self.car.start()
@@ -36,20 +42,18 @@ class Team:
 
 
 class SimulatorManager:
-    def __init__(self, envs, car_suffix, car_socket_url, log_socket_url, redis_socket_path):
-        cmap = get_cmap("tab20")
-        self.teams = OrderedDict(
-                (env.env_id, Team(env, car_suffix, to_hex(cmap(i)), car_socket_url))
-                for i, env in enumerate(envs))
+    def __init__(self, teams, car_name_suffix, log_socket_url, redis_socket_path):
+        self.teams = OrderedDict((t.env.env_id, t) for t in teams)
         self.log_parser = log_parser.LogParser(log_socket_url, redis_socket_path)
         self.redis = Redis(unix_socket_path=redis_socket_path)
+        self.car_name_suffix = car_name_suffix
 
     def __enter__(self):
         for t in self.teams.values():
             t.env.manager = self
         self.log_parser.start()
-        for t in self.teams.values():
-            t.new_car()
+        for team_id in self.teams:
+            self.new_car(team_id)
         return self
 
     def __exit__(self, *exception_data):
@@ -57,6 +61,7 @@ class SimulatorManager:
             t.destroy_car()
             t.env.manager = None
         self.log_parser.stop()
+        self.redis.flushall()
 
     def get_simulator_state_or_empty(self, team_id):
         car_id = self.teams[team_id].car.car_id
@@ -76,10 +81,15 @@ class SimulatorManager:
         self.teams[team_id].car.send_command(cmd)
 
     def new_car(self, team_id):
-        return self.teams[team_id].new_car()
+        return self.teams[team_id].new_car(self.car_name_suffix)
 
     def destroy_car(self, team_id):
         car_id = self.teams[team_id].car.car_id
         self.redis.delete(car_id)
         self.redis.delete(team_id)
         self.teams[team_id].destroy_car()
+
+    def get_car_id(self, team_id):
+        if self.teams[team_id].car is None:
+            return ''
+        return self.teams[team_id].car.car_id

@@ -10,12 +10,13 @@ from redis import Redis
 import numpy as np
 from scipy.spatial.distance import minkowski
 from tf_agents.environments import py_environment
+from tf_agents.environments import tf_py_environment, batched_py_environment
 from tf_agents.specs import array_spec
 from tf_agents.trajectories import time_step as ts
 
 from robotini_ddpg.util import sleep_until
 from robotini_ddpg.model import features
-from robotini_ddpg.simulator import camera, log_parser
+from robotini_ddpg.simulator import camera, log_parser, manager
 
 
 fps_limit = 60
@@ -80,6 +81,9 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
     def observation_spec(self):
         return self._observation_spec
 
+    def get_car_state(self):
+        return self.manager.get_car_state(self.env_id)
+
     def get_state_snapshot(self, simulator_state):
         episode = self.episode_state
         epoch = self.epoch_state
@@ -87,6 +91,7 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
         x_img, y_img = features.observation_to_xy_images(episode["observation"])
         return {
             "env_id": self.env_id,
+            "car_id": self.manager.get_car_id(self.env_id),
             "episode": epoch["episode"],
             "original_frame": camera.frame_to_base64(episode["original_frame"]),
             "observation_x": camera.frame_to_base64(x_img),
@@ -139,12 +144,14 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
             logging.info("'%s' - begin episode %d", self.env_id, epoch["episode"])
 
         # Read car state and do action
-        frames, sim_state = self.manager.get_car_state(self.env_id)
+        frames, sim_state = self.get_car_state()
         self.do_action(action)
 
-        # Use camera frames and simulator state from previous step if new values are empty
-        frames = epoch["frames"] = (frames or epoch["frames"])
-        sim_state = epoch["simulator_state"] = (sim_state or epoch["simulator_state"])
+        # Skip step if there is no state
+        if not (frames and sim_state):
+            logging.warning("'%s' - no state from simulator, skipping step %d", self.env_id, episode["step_num"])
+            sleep_until(episode["next_step_time"])
+            return ts.transition(self.empty_observation(), reward=0)
 
         # Extract model inputs from camera frame buffer
         frame, observation = features.camera_frames_to_observation(frames)
@@ -184,3 +191,13 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
         # Still going, throttle FPS and transition to next step
         sleep_until(episode["next_step_time"])
         return ts.transition(observation, reward=reward)
+
+
+def create_batched_tf_env(team_ids, redis_socket_path, car_socket_url, isolation=False):
+    car_envs = [RobotiniCarEnv(team_id, redis_socket_path) for team_id in team_ids]
+    teams = list(manager.teams_from_envs(car_envs, car_socket_url))
+
+    batch_env = batched_py_environment.BatchedPyEnvironment(car_envs, multithreading=not isolation)
+    tf_env = tf_py_environment.TFPyEnvironment(batch_env, isolation=isolation)
+
+    return teams, tf_env

@@ -105,7 +105,7 @@ class CarConnection:
             self.proc.terminate()
 
     def read_camera_frames(self):
-        timeout = 2
+        timeout = 0.1
         while True:
             try:
                 buf = self.frame_queue.get(block=timeout > 0, timeout=timeout)
