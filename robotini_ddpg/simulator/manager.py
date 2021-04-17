@@ -26,42 +26,54 @@ class Team:
         self.car_socket_url = car_socket_url
         self.car = None
 
-    def new_car(self, car_name_suffix):
+    def new_car(self, car_name_suffix=None):
         assert not self.car, "team {} already has car {}".format(self.env.env_id, self.car.car_id)
+        car_id = self.env.env_id
+        if car_name_suffix:
+            car_id += "_" + car_name_suffix
         self.car = connection.CarConnection(
                 self.car_socket_url,
-                self.env.env_id + "_" + car_name_suffix,
+                car_id,
                 self.color,
                 self.env.env_id)
         self.car.start()
         return self.car.car_id
 
-    def destroy_car(self):
-        self.car.stop()
-        self.car = None
-
 
 class SimulatorManager:
-    def __init__(self, teams, car_name_suffix, log_socket_url, redis_socket_path):
+    def __init__(self, teams, log_socket_url, redis_socket_path, car_name_suffix=None):
         self.teams = OrderedDict((t.env.env_id, t) for t in teams)
         self.log_parser = log_parser.LogParser(log_socket_url, redis_socket_path)
         self.redis = Redis(unix_socket_path=redis_socket_path)
         self.car_name_suffix = car_name_suffix
+        self.log_socket_url = log_socket_url
 
     def __enter__(self):
+        # Try connecting to the simulator, throwing an exception if it is offline
+        connection.connect(self.log_socket_url).close()
         for t in self.teams.values():
             t.env.manager = self
         self.log_parser.start()
-        for team_id in self.teams:
-            self.new_car(team_id)
+        for t in self.teams.values():
+            t.new_car(self.car_name_suffix)
         return self
 
-    def __exit__(self, *exception_data):
+    def __exit__(self, *exc_info):
         for t in self.teams.values():
-            t.destroy_car()
+            t.car.stop()
+        car_ids = []
+        for team_id, t in self.teams.items():
+            t.car.join()
+            car_ids.append(t.car.car_id)
+            t.car = None
             t.env.manager = None
-        self.log_parser.stop()
-        self.redis.flushall()
+        self.log_parser.join()
+        for car_id in car_ids:
+            self.redis.delete(car_id)
+        for team_id in self.teams:
+            self.redis.delete(team_id)
+        # Inform the calling context we did not handle any exceptions
+        return False
 
     def get_simulator_state_or_empty(self, team_id):
         car_id = self.teams[team_id].car.car_id
@@ -80,16 +92,5 @@ class SimulatorManager:
     def send_command(self, team_id, cmd):
         self.teams[team_id].car.send_command(cmd)
 
-    def new_car(self, team_id):
-        return self.teams[team_id].new_car(self.car_name_suffix)
-
-    def destroy_car(self, team_id):
-        car_id = self.teams[team_id].car.car_id
-        self.redis.delete(car_id)
-        self.redis.delete(team_id)
-        self.teams[team_id].destroy_car()
-
-    def get_car_id(self, team_id):
-        if self.teams[team_id].car is None:
-            return ''
-        return self.teams[team_id].car.car_id
+    def get_car(self, team_id):
+        return self.teams[team_id].car
