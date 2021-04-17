@@ -23,7 +23,7 @@ def run(fps_limit, redis_socket_path, monitored_team_ids, host, port):
                 if state_json:
                     yield state_json + b"\r\n"
             except ConnectionError:
-                print("redis connection error, sleeping for 3 secs")
+                app.logger.exception("redis connection error")
                 next_frame += 3
             sleep_until(next_frame)
 

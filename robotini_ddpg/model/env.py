@@ -50,6 +50,7 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
             "episode": 0,
             "lap_count": 0,
             "crash_count": 0,
+            "return_to_track_count": 0,
             "track_segment": 0,
             "frames": [np.zeros(camera.frame_shape)],
             "simulator_state": log_parser.to_numpy(log_parser.empty_state()),
@@ -65,11 +66,11 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
             "track_segment": epoch["track_segment"],
             "distance": 0,
             "crash_count": 0,
-            "init_crash_count": epoch["crash_count"],
             "return": 0,
             "lap_count": 0,
-            "init_lap_count": epoch["lap_count"],
             "next_step_time": time.perf_counter(),
+            "init_crash_count": epoch["crash_count"],
+            "init_lap_count": epoch["lap_count"],
         }
 
     def empty_observation(self):
@@ -90,8 +91,8 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
         sim = simulator_state
         x_img, y_img = features.observation_to_xy_images(episode["observation"])
         return {
-            "env_id": self.env_id,
-            "car_id": self.manager.get_car_id(self.env_id),
+            "car_id": self.manager.get_car(self.env_id).car_id,
+            "car_color": self.manager.teams[self.env_id].color,
             "episode": epoch["episode"],
             "original_frame": camera.frame_to_base64(episode["original_frame"]),
             "observation_x": camera.frame_to_base64(x_img),
@@ -110,6 +111,9 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
             "total_lap_count": epoch["lap_count"],
             "total_crash_count": epoch["crash_count"],
             "crash_count": episode["crash_count"],
+            "return_to_track_count": epoch["return_to_track_count"],
+            "num_commands_in_queue": self.manager.get_car(self.env_id).cmd_queue.qsize(),
+            "num_frames_in_queue": self.manager.get_car(self.env_id).frame_queue.qsize(),
         }
 
     def write_state_snapshot(self, data):
@@ -124,6 +128,10 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
     def do_action(self, action):
         self.manager.send_command(self.env_id, {"action": "forward", "value": float(action[0])})
         self.manager.send_command(self.env_id, {"action": "turn", "value": float(action[1])})
+
+    def transition(self, observation, **ts_kwargs):
+        sleep_until(self.episode_state["next_step_time"])
+        return ts.transition(observation, **ts_kwargs)
 
     def terminate(self, observation, **ts_kwargs):
         self._episode_ended = True
@@ -141,17 +149,19 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
 
         if episode["step_num"] == 1:
             epoch["episode"] += 1
-            logging.info("'%s' - begin episode %d", self.env_id, epoch["episode"])
+            logging.debug("'%s' - begin episode %d", self.env_id, epoch["episode"])
 
         # Read car state and do action
         frames, sim_state = self.get_car_state()
         self.do_action(action)
 
         # Skip step if there is no state
-        if not (frames and sim_state):
-            logging.warning("'%s' - no state from simulator, skipping step %d", self.env_id, episode["step_num"])
-            sleep_until(episode["next_step_time"])
-            return ts.transition(self.empty_observation(), reward=0)
+        if not sim_state:
+            logging.warning("'%s' - simulator state is empty, skipping step %d", self.env_id, episode["step_num"])
+            return self.transition(self.empty_observation(), reward=0)
+        if not frames:
+            logging.warning("'%s' - camera frame buffer is empty, skipping step %d", self.env_id, episode["step_num"])
+            return self.transition(self.empty_observation(), reward=0)
 
         # Extract model inputs from camera frame buffer
         frame, observation = features.camera_frames_to_observation(frames)
@@ -173,24 +183,19 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
         episode["crash_count"] = sim_state["crash_count"] - episode["init_crash_count"]
         epoch["lap_count"] = sim_state["lap_count"]
         epoch["crash_count"] = sim_state["crash_count"]
+        epoch["return_to_track_count"] = sim_state["return_to_track_count"]
         episode["track_segment"] = sim_state["track_segment"]
 
         # Write JSON snapshot of current state into Redis
         self.write_state_snapshot(self.get_state_snapshot(sim_state))
 
-        # Terminate episode if car did enough laps
-        if episode["lap_count"] >= num_laps_per_episode:
-            logging.info("'%s' - end episode at step %d after %d completed laps",
-                    self.env_id, episode["step_num"], episode["lap_count"])
-            return self.terminate(observation, reward=reward)
         if episode["step_num"] > 20 and crashed:
-            logging.info("'%s' - end episode at step %d, car crashed",
+            logging.debug("'%s' - end episode at step %d, car crashed",
                     self.env_id, episode["step_num"])
-            return self.terminate(observation, reward=-100)
+            return self.terminate(observation, reward=0)
 
         # Still going, throttle FPS and transition to next step
-        sleep_until(episode["next_step_time"])
-        return ts.transition(observation, reward=reward)
+        return self.transition(observation, reward=reward)
 
 
 def create_batched_tf_env(team_ids, redis_socket_path, car_socket_url, isolation=False):

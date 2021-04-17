@@ -48,3 +48,4 @@ def run_snail_until_finish_line(batched_tf_env):
                 _, sim_state = env.get_car_state()
                 if sim_state and sim_state["track_segment"] == 0:
                     still_running.remove(env.env_id)
+    batched_tf_env.reset()
