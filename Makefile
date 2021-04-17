@@ -20,17 +20,15 @@ export TF_CPP_MIN_LOG_LEVEL PYTHON_BIN REDIS_SOCKET
 clean:
 	rm -rv $(CACHE_DIR)
 
-start_monitor:
-	$(PYTHON_BIN) robotini_ddpg/monitor/webapp.py $(REDIS_SOCKET) $(MONITORED_TEAM_IDS)
-
-env_demo:
-	./scripts/with_redis.bash $(PYTHON_BIN) scripts/env_demo.py \
-		--car-socket-url $(CAR_SOCKET_URL) \
-		--log-socket-url $(LOG_SOCKET_URL) \
-		--redis-socket-path $(REDIS_SOCKET)
+start_redis:
+	redis-server \
+		--unixsocket $(REDIS_SOCKET) \
+		--save "" \
+		--maxmemory 32mb \
+		--port 0
 
 train_ddpg:
-	./scripts/with_redis.bash $(PYTHON_BIN) scripts/train_ddpg.py \
+	$(PYTHON_BIN) scripts/train_ddpg.py \
 		--car-socket-url $(CAR_SOCKET_URL) \
 		--log-socket-url $(LOG_SOCKET_URL) \
 		--redis-socket-path $(REDIS_SOCKET) \

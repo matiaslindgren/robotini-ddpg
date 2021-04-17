@@ -1,37 +1,28 @@
 actor:
   kwargs:
-    input_fc_layer_params: [512, 256, 128]
-    lstm_size: [128]
-    output_fc_layer_params: [256, 128, 64, 32]
+    input_fc_layer_params: [256]
+    lstm_size: [512]
+    output_fc_layer_params: [256, 128]
   learning_rate: 0.0001
 
 critic:
   kwargs:
     joint_fc_layer_params: [256]
-    lstm_size: [128]
-    observation_fc_layer_params: [256, 128]
-    output_fc_layer_params: [256, 128, 64, 32]
+    lstm_size: [512]
+    observation_fc_layer_params: [256]
+    output_fc_layer_params: [256, 128]
   learning_rate: 0.001
 
-batch_size: 64
-collect_steps_per_iteration: 6400
-initial_collect_steps: 12800
-num_iterations: 200
+num_epochs: 200
 num_train_envs: 6
 num_eval_envs: 2
-replay_buffer_capacity: 1000000
-train_sequence_length: 30
-train_steps_per_iteration: 100
+train_batches_per_epoch: 10
+collect_batches_per_epoch: 2
+initial_collect_batches: 10
 
-target_update_tau: 0.01
+train_sequence_length: 60
+batch_size: 64
+replay_buffer_max_length: 400_000
+num_eval_episodes: 8
 
 use_tf_functions: true
-debug_summaries: true
-eval_interval: 100
-# eval_interval: 500
-log_interval: 500
-num_eval_episodes: 8
-save_interval: 3000
-summaries_flush_secs: 10
-summarize_grads_and_vars: true
-summary_interval: 500

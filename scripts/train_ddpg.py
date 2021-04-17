@@ -26,14 +26,11 @@ import os
 import sys
 import time
 
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-logger.addHandler(logging.StreamHandler())
-
 import yaml
+import numpy as np
 import tensorflow as tf
 
-from tf_agents.drivers import dynamic_step_driver
+from tf_agents.drivers import dynamic_step_driver, dynamic_episode_driver
 from tf_agents.eval import metric_utils
 from tf_agents.metrics import tf_metrics
 from tf_agents.policies import policy_saver
@@ -42,29 +39,40 @@ from tf_agents.utils import common
 
 from robotini_ddpg.model import env, snail, ddpg
 from robotini_ddpg.simulator import manager
+from robotini_ddpg import util
 
+
+logger = util.reset_logger()
+util.remove_logger("tensorflow")
 
 class Config:
     def __init__(self, path):
         with open(path) as f:
             self.__dict__.update(yaml.safe_load(f.read()))
 
+class AverageMetric:
+    def __init__(self, name, data):
+        self.name = name
+        self.data = data
+
+    def result(self):
+        return self.data.mean()
+
 
 def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
-    cache_dir = os.path.expanduser(cache_dir)
-    train_dir = os.path.join(cache_dir, 'train')
-    eval_dir = os.path.join(cache_dir, 'eval')
-    policy_dir = os.path.join(cache_dir, 'policies')
+    cache_dirs = {
+        "collection": os.path.join(cache_dir, "collection"),
+        "training": os.path.join(cache_dir, "training"),
+        "evaluation": os.path.join(cache_dir, "evaluation"),
+        "policies": os.path.join(cache_dir, "policies"),
+    }
+    summary_writers = {
+            k: tf.summary.create_file_writer(cache_dirs[k])
+            for k in ["collection", "training", "evaluation"]}
 
     team_ids = ["env{}".format(i+1) for i in range(conf.num_train_envs+conf.num_eval_envs)]
     train_team_ids = team_ids[:conf.num_train_envs]
     eval_team_ids = team_ids[conf.num_train_envs:]
-
-    print("agent monitor webapp startup command:\n\n"
-          "{:s} robotini_ddpg/monitor/webapp.py {:s} {:s}\n\n".format(
-              os.environ["PYTHON_BIN"], redis_socket_path, ' '.join(team_ids)))
-
-    global_step = tf.compat.v1.train.get_or_create_global_step()
 
     train_teams, train_env = env.create_batched_tf_env(
             train_team_ids, redis_socket_path, car_socket_url)
@@ -76,68 +84,52 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
             train_env.action_spec(),
             conf.actor,
             conf.critic,
-            conf.target_update_tau)
-
-    logger.info("Actor network:")
+            conf.train_batches_per_epoch)
     tf_agent._actor_network.summary(print_fn=logging.info)
-    logger.info("Critic network:")
     tf_agent._critic_network.summary(print_fn=logging.info)
 
-    train_metrics = [
-            tf_metrics.NumberOfEpisodes(),
-            tf_metrics.EnvironmentSteps(),
-            tf_metrics.AverageReturnMetric(batch_size=conf.num_train_envs),
-            tf_metrics.AverageEpisodeLengthMetric(batch_size=conf.num_train_envs),
-    ]
+    logger.info(("\nStart the agent monitor webapp with:\n\n"
+                 "%s robotini_ddpg/monitor/webapp.py %s %s\n"),
+                os.environ["PYTHON_BIN"], redis_socket_path, ' '.join(team_ids))
 
-    eval_policy = tf_agent.policy
-    collect_policy = tf_agent.collect_policy
-    initial_collect_policy = tf_agent.collect_policy
+    metric_classes = (
+        tf_metrics.MinReturnMetric,
+        tf_metrics.MaxReturnMetric,
+        tf_metrics.AverageReturnMetric,
+        tf_metrics.AverageEpisodeLengthMetric,
+    )
+    collection_metrics [M(batch_size=conf.num_train_envs) for M in metric_classes]
+    evaluation_metrics = [M(batch_size=conf.num_eval_envs, buffer_size=conf.num_eval_episodes) for M in metric_classes]
 
     replay_buffer = tf_uniform_replay_buffer.TFUniformReplayBuffer(
             tf_agent.collect_data_spec,
             batch_size=train_env.batch_size,
-            max_length=conf.replay_buffer_capacity)
-
-    initial_collect_driver = dynamic_step_driver.DynamicStepDriver(
-            train_env,
-            initial_collect_policy,
-            observers=[replay_buffer.add_batch] + train_metrics,
-            num_steps=conf.initial_collect_steps)
+            max_length=conf.replay_buffer_max_length,
+            dataset_drop_remainder=True)
 
     collect_driver = dynamic_step_driver.DynamicStepDriver(
             train_env,
-            collect_policy,
-            observers=[replay_buffer.add_batch] + train_metrics,
-            num_steps=conf.collect_steps_per_iteration)
+            tf_agent.collect_policy,
+            observers=[replay_buffer.add_batch] + collection_metrics,
+            num_steps=conf.batch_size*conf.train_sequence_length*conf.collect_batches_per_epoch)
+
+    evaluation_driver = dynamic_episode_driver.DynamicEpisodeDriver(
+            eval_env,
+            tf_agent.policy,
+            observers=evaluation_metrics,
+            num_episodes=conf.num_eval_episodes)
 
     if conf.use_tf_functions:
-        initial_collect_driver.run = common.function(initial_collect_driver.run)
         collect_driver.run = common.function(collect_driver.run)
         tf_agent.train = common.function(tf_agent.train)
 
-    logger.info("Testing train environment with trivial policy")
-    car_suffix = "train_env_test"
-    with manager.SimulatorManager(train_teams, car_suffix, log_socket_url, redis_socket_path) as sim_manager:
+    # Initialize replay buffer by doing some exploration in the simulator
+    car_suffix = "init"
+    with manager.SimulatorManager(train_teams, log_socket_url, redis_socket_path, car_suffix+"_explore"):
+        logger.info("Moving to starting line")
         snail.run_snail_until_finish_line(train_env)
-
-    logger.info("Testing eval environment with trivial policy")
-    car_suffix = "eval_env_test"
-    with manager.SimulatorManager(eval_teams, car_suffix, log_socket_url, redis_socket_path) as sim_manager:
-        snail.run_snail_until_finish_line(eval_env)
-
-    logger.info("Initializing replay buffer by collecting experience for %d steps in %d parallel environments",
-            conf.initial_collect_steps, conf.num_train_envs)
-    car_suffix = "init_experience"
-    with manager.SimulatorManager(train_teams, car_suffix, log_socket_url, redis_socket_path) as sim_manager:
-        snail.run_snail_until_finish_line(train_env)
-        initial_collect_driver.run()
-
-    time_step = None
-    policy_state = collect_policy.get_initial_state(train_env.batch_size)
-
-    timed_at_step = global_step.numpy()
-    time_acc = 0
+        logger.info("Collecting initial experience")
+        collect_driver.run()
 
     # Dataset generates trajectories with shape [BxTx...]
     dataset = replay_buffer.as_dataset(
@@ -148,78 +140,81 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
 
     def train_step():
         experience_batch, _ = next(iterator)
-        return tf_agent.train(experience_batch)
+        loss = tf_agent.train(experience_batch)
+        return loss
 
     if conf.use_tf_functions:
         train_step = common.function(train_step)
 
-    # eval_policy_saver = policy_saver.PolicySaver(eval_policy, batch_size=eval_env.batch_size)
-    eval_metrics = [
-            tf_metrics.AverageReturnMetric(
-                batch_size=conf.num_eval_envs,
-                buffer_size=conf.num_eval_episodes),
-            tf_metrics.AverageEpisodeLengthMetric(
-                batch_size=conf.num_eval_envs,
-                buffer_size=conf.num_eval_episodes),
-    ]
+    eval_policy_saver = policy_saver.PolicySaver(
+            tf_agent.policy,
+            batch_size=eval_env.batch_size,
+            train_step=tf_agent.train_step_counter)
 
-    for iteration in range(1, conf.num_iterations+1):
-        car_suffix = "iteration{:d}".format(iteration)
+    # Start main training loop
+    time_step = None
+    policy_state = tf_agent.collect_policy.get_initial_state(train_env.batch_size)
 
-        start_time = time.time()
-        with manager.SimulatorManager(train_teams, car_suffix, log_socket_url, redis_socket_path) as sim_manager:
+    for epoch in range(1, conf.num_epochs+1):
+        logging.info("Epoch %d - training step: %d, frames in replay buffer: %d",
+                epoch,
+                tf_agent.train_step_counter.numpy(),
+                replay_buffer._num_frames().numpy())
+        car_suffix = "epoch{:d}".format(epoch)
+
+        with manager.SimulatorManager(train_teams, log_socket_url, redis_socket_path, car_suffix+"_explore"):
+            logger.info("Moving to starting line")
             snail.run_snail_until_finish_line(train_env)
-            logger.info("Iteration %d - Collecting experience for %d steps in %d parallel environments",
-                    iteration, conf.collect_steps_per_iteration, conf.num_train_envs)
+            logger.info("Collecting experience")
             time_step, policy_state = collect_driver.run(
                     time_step=time_step,
-                    policy_state=policy_state,
-            )
+                    policy_state=policy_state)
+        with summary_writers["collection"].as_default():
+            metric_utils.log_metrics(collection_metrics)
+            for m in collection_metrics:
+                m.tf_summaries(train_step=tf_agent.train_step_counter)
 
-        logger.info("Iteration %d - Training", iteration)
-        for _ in range(conf.train_steps_per_iteration):
-            train_loss = train_step()
+        num_train_steps = conf.train_batches_per_epoch
+        logger.info("Training for %d steps (batches)", num_train_steps)
+        time_per_step = np.zeros(num_train_steps, np.float32)
+        train_losses = np.zeros(num_train_steps, np.float32)
+        with summary_writers["training"].as_default(step=tf_agent.train_step_counter):
+            for i in range(num_train_steps):
+                t0 = time.perf_counter()
+                train_loss = train_step()
+                t1 = time.perf_counter()
+                time_per_step[i] = t1 - t0
+                train_losses[i] = train_loss.loss
+            metric_utils.log_metrics([
+                AverageMetric("AverageTrainingLoss", train_losses),
+                AverageMetric("AverageTrainingStepSec", time_per_step)])
 
-        logger.info("Iteration %d - Evaluating", iteration)
+        logger.info("Evaluating actor policy")
+        with manager.SimulatorManager(eval_teams, log_socket_url, redis_socket_path, car_suffix+"_eval"):
+            logger.info("Moving to starting line")
+            snail.run_snail_until_finish_line(eval_env)
+            logger.info("Evaluating")
+            evaluation_driver.run(
+                    time_step=None,
+                    policy_state=tf_agent.policy.get_initial_state(eval_env.batch_size))
+        with summary_writers["evaluation"].as_default():
+            metric_utils.log_metrics(evaluation_metrics)
+            for m in evaluation_metrics:
+                m.tf_summaries(train_step=tf_agent.train_step_counter)
 
-        time_acc += time.time() - start_time
-
-        if global_step.numpy() % conf.log_interval == 0:
-            logger.info('step = %d, loss = %f', global_step.numpy(),
-                                     train_loss.loss)
-            steps_per_sec = (global_step.numpy() - timed_at_step) / time_acc
-            logger.info('%.3f steps/sec', steps_per_sec)
-            tf.compat.v2.summary.scalar(
-                    name='global_steps_per_sec', data=steps_per_sec, step=global_step)
-            timed_at_step = global_step.numpy()
-            time_acc = 0
-
-        for train_metric in train_metrics:
-            train_metric.tf_summaries(
-                    train_step=global_step, step_metrics=train_metrics[:2])
-
-        if global_step.numpy() % conf.eval_interval == 0:
-            with manager.SimulatorManager(eval_teams, car_suffix + "_evaluation", log_socket_url, redis_socket_path) as sim_manager:
-                snail.run_snail_until_finish_line(eval_env)
-                _ = metric_utils.compute(
-                        eval_metrics,
-                        eval_env,
-                        eval_policy,
-                        num_episodes=conf.num_eval_episodes,
-                        # train_step=global_step,
-                        # summary_writer=eval_summary_writer,
-                        # summary_prefix='Metrics',
-                )
-            metric_utils.log_metrics(eval_metrics)
-
-        # if global_step.numpy() % conf.save_interval == 0:
-        #     save_path = os.path.join(policy_dir, "policy_step{:d}".format(global_step.numpy()))
-        #     logger.info("saving policy to '%s'", save_path)
-        #     eval_policy_saver.save(save_path)
+        eval_avg_return = next(m for m in evaluation_metrics if m.name == "AverageReturn")
+        policy_save_dir = os.path.join(
+                cache_dirs["policies"],
+                "{:d}_Step{:d}".format(
+                    round(time.time()),
+                    tf_agent.train_step_counter.numpy()),
+                "AvgEvalReturn{:d}".format(round(eval_avg_return.result().numpy())))
+        logger.info("Saving policy to '%s'", policy_save_dir)
+        eval_policy_saver.save(policy_save_dir)
 
 
-def run(config_path, **kwargs):
-    train(Config(config_path), **kwargs)
+def run(config_path, cache_dir, **kwargs):
+    train(Config(config_path), os.path.abspath(cache_dir), **kwargs)
 
 
 if __name__ == "__main__":
