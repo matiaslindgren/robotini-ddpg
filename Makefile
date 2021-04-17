@@ -8,8 +8,9 @@ LOG_SOCKET_URL := $(SIMULATOR_HOST):11001
 CAR_SOCKET_URL := $(SIMULATOR_HOST):11000
 REDIS_SOCKET := /tmp/robotini-ddpg.redis.sock
 CACHE_DIR := ./tf-cache
-MONITORED_TEAM_IDS := test_snail{1..3}
+MONITORED_TEAM_IDS := env{1..8}
 CONFIG_PATH := ./scripts/config.yml
+SAVED_POLICY_DIR := tmp-policy
 
 TF_CPP_MIN_LOG_LEVEL := 1
 
@@ -35,5 +36,15 @@ train_ddpg:
 		--config-path $(CONFIG_PATH) \
 		--cache-dir $(CACHE_DIR)
 
+start_monitor:
+	$(PYTHON_BIN) robotini_ddpg/monitor/webapp.py $(REDIS_SOCKET) $(MONITORED_TEAM_IDS)
+
 start_tensorboard:
 	tensorboard --logdir $(CACHE_DIR)
+
+run_trained_policy:
+	$(PYTHON_BIN) scripts/run_trained_policy.py \
+		--car-socket-url $(CAR_SOCKET_URL) \
+		--log-socket-url $(LOG_SOCKET_URL) \
+		--redis-socket-path $(REDIS_SOCKET) \
+		--policy-dir $(SAVED_POLICY_DIR)
