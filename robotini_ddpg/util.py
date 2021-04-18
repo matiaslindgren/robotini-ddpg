@@ -63,3 +63,6 @@ def get_best_saved_policy(policy_dir, metric="AvgEvalReturn"):
     get_value = lambda path: metric_value_from_filename(path, metric)
     best_policy_path = max(os.scandir(policy_dir), key=get_value)
     return best_policy_path.path, get_value(best_policy_path)
+
+def find_first(metrics, name):
+    return next((m for m in metrics if m.name == name), None)

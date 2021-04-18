@@ -180,9 +180,12 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
                     time_step=time_step,
                     policy_state=policy_state)
         logging.info('\n' + '\n'.join(util.format_metric(m) for m in collection_metrics))
-        with summary_writers["collection"].as_default():
-            for m in collection_metrics:
-                m.tf_summaries(train_step=tf_agent.train_step_counter)
+        if util.find_first(collection_metrics, "AverageEpisodeLengthMetric").result() == 0:
+            logging.warning("Not writing episode summaries for collection metrics since no car managed to do a full episode")
+        else:
+            with summary_writers["collection"].as_default():
+                for m in collection_metrics:
+                    m.tf_summaries(train_step=tf_agent.train_step_counter)
 
         num_train_steps = conf.train_batches_per_epoch
         logger.info("Training for %d steps (batches)", num_train_steps)
@@ -215,7 +218,7 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
                 for m in evaluation_metrics:
                     m.tf_summaries(train_step=tf_agent.train_step_counter)
 
-            eval_avg_return = next(m for m in evaluation_metrics if m.name == "AverageReturn")
+            eval_avg_return = util.find_first(evaluation_metrics, "AverageReturn")
             eval_avg_return = eval_avg_return.result().numpy()
             policy_save_dir = os.path.join(
                     cache_dirs["saved_policies"],
