@@ -12,7 +12,7 @@ from robotini_ddpg.simulator.camera import rgb_idx
 n_x = n_y = 3
 observation_shape = (n_x+n_y, 3)
 
-speed_penalty_threshold = 1.0
+speed_penalty_threshold = 0.5
 complete_lap_bonus = 100.0
 complete_track_segment_bonus = 10.0
 crash_penalty = 10.0
@@ -34,9 +34,9 @@ def reward(episode_state, epoch_state, simulator_state):
     # More speed, more reward
     total += RewardWeight.speed * (episode["speed"] - speed_penalty_threshold)
 
-    # Crash, penalty
+    # Crash, penalty. More speed, more penalty
     if sim["crash_count"] > epoch["crash_count"]:
-        total -= RewardWeight.crash * crash_penalty
+        total -= RewardWeight.crash * crash_penalty * (1 + abs(episode["speed"]))
 
     # Complete lap, big bonus
     if sim["lap_count"] > epoch["lap_count"]:
@@ -44,15 +44,16 @@ def reward(episode_state, epoch_state, simulator_state):
         lap_time_weight = 1.0 / np.clip(sim["lap_time"], 1, None)
         total += RewardWeight.track_segment_passed * lap_time_weight * complete_lap_bonus
 
-    # track_segment will be negative just after the car spawns until it passes the next segment
+    # track_segment will be negative after car spawn until it reaches the starting line
     if sim["track_segment"] >= 0:
         # Complete track segment (not finish line), smol bonus
         if sim["track_segment"] > episode["track_segment"] >= 0:
             total += RewardWeight.track_segment_passed * complete_track_segment_bonus
 
         # Too large deviation from correct direction, penalty
-        delta_track_angle = (sim["track_angle"] - max_track_angle) / max_track_angle
-        total -= RewardWeight.wrong_direction * np.clip(delta_track_angle, 0, None)
+        delta_track_angle = sim["track_angle"] - max_track_angle
+        track_angle_penalty = np.clip(delta_track_angle / max_track_angle, 0, None)
+        total -= RewardWeight.wrong_direction * track_angle_penalty
 
     return total
 
