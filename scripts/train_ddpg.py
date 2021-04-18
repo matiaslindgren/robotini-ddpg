@@ -73,12 +73,14 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
     eval_teams, eval_env = env.create_batched_tf_env(
             eval_team_ids, car_socket_url, env_kwargs)
 
+    target_update_period = conf.target_updates_per_epoch/conf.train_batches_per_epoch
+    ddpg_kwargs = dict(conf.ddpg_kwargs, target_update_period=max(1, int(target_update_period)))
     tf_agent = ddpg.create_agent(
         train_env.time_step_spec(),
         train_env.action_spec(),
         conf.actor,
         conf.critic,
-        conf.ddpg_kwargs)
+        ddpg_kwargs)
     tf_agent._actor_network.summary(print_fn=logging.info)
     tf_agent._critic_network.summary(print_fn=logging.info)
 
