@@ -53,14 +53,11 @@ class Config:
 
 def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
     cache_dirs = {
-        "collection": os.path.join(cache_dir, "collection"),
-        "training": os.path.join(cache_dir, "training"),
-        "evaluation": os.path.join(cache_dir, "evaluation"),
-        "saved_policies": os.path.join(cache_dir, "saved_policies"),
-    }
+        k: os.path.join(cache_dir, k)
+        for k in ["collection", "training", "evaluation", "saved_policies"]}
     summary_writers = {
-            k: tf.summary.create_file_writer(cache_dirs[k])
-            for k in ["collection", "training", "evaluation"]}
+        k: tf.summary.create_file_writer(cache_dirs[k])
+        for k in ["collection", "training", "evaluation"]}
 
     team_ids = ["env{}".format(i+1) for i in range(conf.num_train_envs+conf.num_eval_envs)]
     train_team_ids = team_ids[:conf.num_train_envs]
@@ -204,31 +201,35 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
             ]
             logging.info('\n' + '\n'.join(metrics_str))
 
-        logger.info("Evaluating actor policy")
-        with manager.SimulatorManager(eval_teams, log_socket_url, redis_socket_path, car_suffix+"_eval"):
-            logger.info("Moving to starting line")
-            snail.run_snail_until_finish_line(eval_env)
-            logger.info("Evaluating")
-            evaluation_driver.run(
-                    time_step=None,
-                    policy_state=tf_agent.policy.get_initial_state(eval_env.batch_size))
-        logging.info('\n' + '\n'.join(util.format_metric(m) for m in evaluation_metrics))
-        with summary_writers["evaluation"].as_default():
-            for m in evaluation_metrics:
-                m.tf_summaries(train_step=tf_agent.train_step_counter)
+        if epoch == 1 or tf_agent.train_step_counter.numpy() % conf.eval_interval == 0:
+            logger.info("Evaluating actor policy")
+            with manager.SimulatorManager(eval_teams, log_socket_url, redis_socket_path, car_suffix+"_eval"):
+                logger.info("Moving to starting line")
+                snail.run_snail_until_finish_line(eval_env)
+                logger.info("Evaluating")
+                evaluation_driver.run(
+                        time_step=None,
+                        policy_state=tf_agent.policy.get_initial_state(eval_env.batch_size))
+            logging.info('\n' + '\n'.join(util.format_metric(m) for m in evaluation_metrics))
+            with summary_writers["evaluation"].as_default():
+                for m in evaluation_metrics:
+                    m.tf_summaries(train_step=tf_agent.train_step_counter)
 
-        eval_avg_return = next(m for m in evaluation_metrics if m.name == "AverageReturn")
-        eval_avg_return = eval_avg_return.result().numpy()
-        policy_save_dir = os.path.join(
-                cache_dirs["saved_policies"],
-                "{:d}_Step{:d}_AvgEvalReturn{:d}".format(
-                    round(time.time()),
-                    tf_agent.train_step_counter.numpy(),
-                    round(eval_avg_return)))
-        _, best_value_so_far = util.get_best_saved_policy(cache_dirs["saved_policies"])
-        if eval_avg_return > best_value_so_far:
-            logger.info("Saving new best policy to '%s'", policy_save_dir)
-            eval_policy_saver.save(policy_save_dir)
+            eval_avg_return = next(m for m in evaluation_metrics if m.name == "AverageReturn")
+            eval_avg_return = eval_avg_return.result().numpy()
+            policy_save_dir = os.path.join(
+                    cache_dirs["saved_policies"],
+                    "{:d}_Step{:d}_AvgEvalReturn{:d}".format(
+                        round(time.time()),
+                        tf_agent.train_step_counter.numpy(),
+                        round(eval_avg_return)))
+            _, best_value_so_far = util.get_best_saved_policy(cache_dirs["saved_policies"])
+            if eval_avg_return > best_value_so_far:
+                logger.info("Saving new best policy to '%s'", policy_save_dir)
+                eval_policy_saver.save(policy_save_dir)
+
+        for m in collection_metrics + evaluation_metrics:
+            m.reset()
 
 
 def run(config_path, cache_dir, **kwargs):
