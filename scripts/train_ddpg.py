@@ -163,12 +163,10 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
             time_step, policy_state = collect_driver.run(
                     time_step=time_step,
                     policy_state=policy_state)
-        metrics_str = []
+        logging.info('\n' + '\n'.join(util.format_metric(m) for m in collection_metrics))
         with summary_writers["collection"].as_default():
             for m in collection_metrics:
-                metrics_str.append(util.metric_to_str(m))
                 m.tf_summaries(train_step=tf_agent.train_step_counter)
-        logging.info('\n' + '\n'.join(metrics_str))
 
         num_train_steps = conf.train_batches_per_epoch
         logger.info("Training for %d steps (batches)", num_train_steps)
@@ -195,12 +193,10 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
             evaluation_driver.run(
                     time_step=None,
                     policy_state=tf_agent.policy.get_initial_state(eval_env.batch_size))
-        metrics_str = []
+        logging.info('\n' + '\n'.join(util.format_metric(m) for m in evaluation_metrics))
         with summary_writers["evaluation"].as_default():
             for m in evaluation_metrics:
-                metrics_str.append(util.metric_to_str(m))
                 m.tf_summaries(train_step=tf_agent.train_step_counter)
-        logging.info('\n' + '\n'.join(metrics_str))
 
         eval_avg_return = next(m for m in evaluation_metrics if m.name == "AverageReturn")
         eval_avg_return = eval_avg_return.result().numpy()

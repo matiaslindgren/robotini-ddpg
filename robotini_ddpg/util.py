@@ -41,7 +41,7 @@ def remove_logger(name):
     while l.handlers:
         l.handlers.pop()
 
-def metric_to_str(m):
+def format_metric(m):
     return "\t\t {:s} = {:.3f}".format(m.name, m.result().numpy())
 
 def metric_value_from_filename(path, key):
