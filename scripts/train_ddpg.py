@@ -33,7 +33,7 @@ import tensorflow as tf
 from tf_agents.drivers import dynamic_step_driver, dynamic_episode_driver
 from tf_agents.eval import metric_utils
 from tf_agents.metrics import tf_metrics
-from tf_agents.policies import policy_saver
+from tf_agents.policies import policy_saver, ou_noise_policy
 from tf_agents.replay_buffers import tf_uniform_replay_buffer
 from tf_agents.utils import common
 
@@ -101,6 +101,22 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
             max_length=conf.replay_buffer_max_length,
             dataset_drop_remainder=True)
 
+    snail_policy = snail.BlueSnailPolicy(
+        train_env.time_step_spec(),
+        train_env.action_spec(),
+        clip=True)
+    exploring_snail_policy = ou_noise_policy.OUNoisePolicy(
+            snail_policy,
+            ou_stddev=0.1,
+            ou_damping=0.5,
+            clip=True)
+
+    initial_collect_driver = dynamic_step_driver.DynamicStepDriver(
+            train_env,
+            exploring_snail_policy,
+            observers=[replay_buffer.add_batch] + collection_metrics,
+            num_steps=conf.batch_size*conf.train_sequence_length*conf.collect_batches_per_epoch)
+
     collect_driver = dynamic_step_driver.DynamicStepDriver(
             train_env,
             tf_agent.collect_policy,
@@ -123,7 +139,8 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
         logger.info("Moving to starting line")
         snail.run_snail_until_finish_line(train_env)
         logger.info("Collecting initial experience")
-        collect_driver.run()
+        initial_collect_driver.run()
+    logging.info('\n' + '\n'.join(util.format_metric(m) for m in collection_metrics))
 
     # Dataset generates trajectories with shape [BxTx...]
     dataset = replay_buffer.as_dataset(
