@@ -58,8 +58,9 @@ def reward(episode_state, epoch_state, simulator_state):
 
 
 def camera_frames_to_observation(frames):
-    reduced_frame = np.stack(frames).max(axis=0)
-    frame = reduced_frame[20:,:,:].astype(np.float32)
+    assert frames, "cannot extract observation from empty camera frame buffer"
+    frame_full = np.stack(frames).max(axis=0)
+    frame = frame_full[20:,:,:].astype(np.float32)
     x = frame.mean(axis=0)
     y = frame.mean(axis=1)
     x = minmax_scale(x, (0, 1), axis=-1)
