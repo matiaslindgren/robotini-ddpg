@@ -13,16 +13,16 @@ n_x = n_y = 3
 observation_shape = (n_x+n_y, 3)
 
 speed_penalty_threshold = 1.0
-complete_lap_bonus = 25.0
-complete_track_segment_bonus = 30.0
-crash_penalty = 30.0
+complete_lap_bonus = 100.0
+complete_track_segment_bonus = 10.0
+crash_penalty = 10.0
 max_track_angle = 90.0
 
 class RewardWeight:
     speed = 0.5
     crash = 1.0
     track_segment_passed = 1.0
-    wrong_direction = 4.0
+    wrong_direction = 2.0
 
 
 def reward(episode_state, epoch_state, simulator_state):
@@ -34,15 +34,15 @@ def reward(episode_state, epoch_state, simulator_state):
     # More speed, more reward
     total += RewardWeight.speed * (episode["speed"] - speed_penalty_threshold)
 
-    # # Crash, penalty
-    # if sim["crash_count"] > epoch["crash_count"]:
-    #     total -= RewardWeight.crash * crash_penalty
+    # Crash, penalty
+    if sim["crash_count"] > epoch["crash_count"]:
+        total -= RewardWeight.crash * crash_penalty
 
-    # # Complete lap, big bonus
-    # if sim["lap_count"] > epoch["lap_count"]:
-    #     # Slower lap => less bonus, clip at 1 second lap time (minimum/best possible)
-    #     lap_time_weight = 1.0 / np.clip(sim["lap_time"], 1, None)
-    #     total += RewardWeight.track_segment_passed * lap_time_weight * complete_lap_bonus
+    # Complete lap, big bonus
+    if sim["lap_count"] > epoch["lap_count"]:
+        # Slower lap => less bonus, clip at 1 second lap time (minimum/best possible)
+        lap_time_weight = 1.0 / np.clip(sim["lap_time"], 1, None)
+        total += RewardWeight.track_segment_passed * lap_time_weight * complete_lap_bonus
 
     # track_segment will be negative just after the car spawns until it passes the next segment
     if sim["track_segment"] >= 0:

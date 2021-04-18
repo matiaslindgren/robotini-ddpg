@@ -21,6 +21,7 @@ from robotini_ddpg.simulator import camera, log_parser, manager
 
 fps_limit = 60
 num_laps_per_episode = 2
+max_num_steps_per_episode = 4000
 
 
 class RobotiniCarEnv(py_environment.PyEnvironment):
@@ -34,8 +35,8 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
         self._action_spec = array_spec.BoundedArraySpec(
                 shape=[2],
                 dtype=np.float32,
-                minimum=[0.03, -0.5],
-                maximum=[0.4, 0.5],
+                minimum=[0.03, -0.6],
+                maximum=[0.5, 0.6],
                 name="forward_and_turn")
         # Neural network inputs
         self._observation_spec = array_spec.BoundedArraySpec(
@@ -189,8 +190,13 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
         # Write JSON snapshot of current state into Redis
         self.write_state_snapshot(self.get_state_snapshot(sim_state))
 
-        if episode["step_num"] > 20 and crashed:
-            logging.debug("'%s' - end episode at step %d, car crashed",
+        # End episode if car did enough laps
+        if episode["lap_count"] >= num_laps_per_episode:
+            logging.debug("'%s' - end episode at step %d after %d laps",
+                    self.env_id, episode["step_num"], episode["lap_count"])
+            return self.terminate(observation, reward=0)
+        if episode["step_num"] >= max_num_steps_per_episode:
+            logging.debug("'%s' - end episode at step %d, too many steps for one episode",
                     self.env_id, episode["step_num"])
             return self.terminate(observation, reward=0)
 
