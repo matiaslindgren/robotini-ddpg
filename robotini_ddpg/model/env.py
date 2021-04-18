@@ -21,7 +21,7 @@ from robotini_ddpg.simulator import camera, log_parser, manager
 
 class RobotiniCarEnv(py_environment.PyEnvironment):
 
-    def __init__(self, env_id, redis_socket_path, laps_per_episode, max_steps_per_episode, fps_limit=60):
+    def __init__(self, env_id, redis_socket_path, laps_per_episode, max_steps_per_episode, forward_range, turn_range, fps_limit=60):
         self.manager = None
         self.env_id = env_id
         self.redis = Redis(unix_socket_path=redis_socket_path)
@@ -32,8 +32,8 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
         self._action_spec = array_spec.BoundedArraySpec(
                 shape=[2],
                 dtype=np.float32,
-                minimum=[0.03, -0.6],
-                maximum=[0.5, 0.6],
+                minimum=[forward_range[0], turn_range[0]],
+                maximum=[forward_range[1], turn_range[1]],
                 name="forward_and_turn")
         # Neural network inputs
         self._observation_spec = array_spec.BoundedArraySpec(

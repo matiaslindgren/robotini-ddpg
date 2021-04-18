@@ -74,11 +74,11 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
             eval_team_ids, car_socket_url, env_kwargs)
 
     tf_agent = ddpg.create_agent(
-            train_env.time_step_spec(),
-            train_env.action_spec(),
-            conf.actor,
-            conf.critic,
-            conf.train_batches_per_epoch)
+        train_env.time_step_spec(),
+        train_env.action_spec(),
+        conf.actor,
+        conf.critic,
+        conf.ddpg_kwargs)
     tf_agent._actor_network.summary(print_fn=logging.info)
     tf_agent._critic_network.summary(print_fn=logging.info)
 
