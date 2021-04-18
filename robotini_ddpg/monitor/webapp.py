@@ -15,11 +15,14 @@ def run(fps_limit, redis_socket_path, monitored_team_ids, host, port):
     app = Flask(__name__)
 
     def generate_stream(team_id):
+        state_json = b''
         next_frame = time.perf_counter()
         while True:
             next_frame += 1/fps_limit
             try:
-                state_json = redis.hget(team_id, "state_snapshot.json")
+                new_state_json = redis.hget(team_id, "state_snapshot.json")
+                if new_state_json:
+                    state_json = new_state_json
                 if state_json:
                     yield state_json + b"\r\n"
             except ConnectionError:

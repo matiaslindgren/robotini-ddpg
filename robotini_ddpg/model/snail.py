@@ -10,13 +10,13 @@ from robotini_ddpg.model import features
 
 
 class BlueSnailPolicy(tf_policy.TFPolicy):
-    def __init__(self, *args, constant_forward=0.05, **kwargs):
-        self.constant_forward = constant_forward
+    def __init__(self, *args, forward_action=0.05, **kwargs):
+        self.forward_action = forward_action
         super().__init__(*args, **kwargs)
 
     def _action(self, time_step, policy_state, seed):
         turn = features.turn_from_color_mass(time_step.observation)
-        forward = tf.repeat(tf.constant([self.constant_forward]), turn.shape[0])
+        forward = tf.repeat(tf.constant([self.forward_action]), turn.shape[0])
         action = tf.stack((forward, turn), axis=1)
         return policy_step.PolicyStep(action, policy_state)
 
@@ -34,10 +34,11 @@ class BlueSnailPolicy(tf_policy.TFPolicy):
         return traj, next_time_step
 
 
-def run_snail_until_finish_line(batched_tf_env):
+def run_snail_until_finish_line(batched_tf_env, forward_action=0.05):
     policy = BlueSnailPolicy(
             batched_tf_env.time_step_spec(),
             batched_tf_env.action_spec(),
+            forward_action=forward_action,
             clip=False)
     time_step = batched_tf_env.reset()
     still_running = {env.env_id for env in batched_tf_env.pyenv.envs}

@@ -5,7 +5,6 @@ function limitPrecision(_, x) {
 	return x;
 }
 
-
 function updateTeamContainer(teamId, allData) {
 	const teamDiv = document.getElementById(teamId);
 	const {original_frame, observation_x, observation_y, ...metadata} = allData;
@@ -28,7 +27,7 @@ function readAllChunks(readableStream, teamId) {
 				updateTeamContainer(teamId, parsed);
 				chunks = [];
 			} catch {
-				if (chunks.length < 10) {
+				if (chunks.length < 50) {
 					chunks.push(decoded);
 				} else {
 					chunks = [];
@@ -48,9 +47,10 @@ function readAllChunks(readableStream, teamId) {
 
 
 function connect(teamId, n) {
+	const maxNumConnectAttempts = 100;
 	n = n || 0;
 	console.log("Connecting", teamId);
-	if (n > 2) {
+	if (n >= maxNumConnectAttempts) {
 		console.error("Unable to connect to server, tried", n, "times");
 		return;
 	}
@@ -58,7 +58,7 @@ function connect(teamId, n) {
 		.then(response => readAllChunks(response.body, teamId))
 		.catch(err => {
 			console.warn("Unable to connect to server. Reconnecting...", n)
-			setTimeout(connect, 1000, teamId, n+1);
+			setTimeout(connect, (n+1) * 500, teamId, n+1);
 		})
 }
 

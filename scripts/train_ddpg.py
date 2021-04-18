@@ -50,14 +50,6 @@ class Config:
         with open(path) as f:
             self.__dict__.update(yaml.safe_load(f.read()))
 
-class AverageMetric:
-    def __init__(self, name, data):
-        self.name = name
-        self.data = data
-
-    def result(self):
-        return self.data.mean()
-
 
 def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
     cache_dirs = {
@@ -169,10 +161,12 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
             time_step, policy_state = collect_driver.run(
                     time_step=time_step,
                     policy_state=policy_state)
+        metrics_str = []
         with summary_writers["collection"].as_default():
-            metric_utils.log_metrics(collection_metrics)
             for m in collection_metrics:
+                metrics_str.append(util.metric_to_str(m))
                 m.tf_summaries(train_step=tf_agent.train_step_counter)
+        logging.info('\n' + '\n'.join(metrics_str))
 
         num_train_steps = conf.train_batches_per_epoch
         logger.info("Training for %d steps (batches)", num_train_steps)
@@ -185,9 +179,11 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
                 t1 = time.perf_counter()
                 time_per_step[i] = t1 - t0
                 train_losses[i] = train_loss.loss
-            metric_utils.log_metrics([
-                AverageMetric("AverageTrainingLoss", train_losses),
-                AverageMetric("AverageTrainingStepSec", time_per_step)])
+            metrics_str = [
+                "\t\t AverageTrainingLoss = {:.3f}".format(train_losses.mean()),
+                "\t\t AverageTrainingStepSec = {:.3f}".format(time_per_step.mean()),
+            ]
+            logging.info('\n' + '\n'.join(metrics_str))
 
         logger.info("Evaluating actor policy")
         with manager.SimulatorManager(eval_teams, log_socket_url, redis_socket_path, car_suffix+"_eval"):
@@ -197,10 +193,12 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
             evaluation_driver.run(
                     time_step=None,
                     policy_state=tf_agent.policy.get_initial_state(eval_env.batch_size))
+        metrics_str = []
         with summary_writers["evaluation"].as_default():
-            metric_utils.log_metrics(evaluation_metrics)
             for m in evaluation_metrics:
+                metrics_str.append(util.metric_to_str(m))
                 m.tf_summaries(train_step=tf_agent.train_step_counter)
+        logging.info('\n' + '\n'.join(metrics_str))
 
         eval_avg_return = next(m for m in evaluation_metrics if m.name == "AverageReturn")
         policy_save_dir = os.path.join(
