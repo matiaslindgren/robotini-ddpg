@@ -1,4 +1,6 @@
 import logging
+import math
+import os
 import queue
 import time
 
@@ -38,3 +40,26 @@ def remove_logger(name):
     l = logging.getLogger(name)
     while l.handlers:
         l.handlers.pop()
+
+def metric_to_str(m):
+    return "\t\t {:s} = {:.3f}".format(m.name, m.result().numpy())
+
+def metric_value_from_filename(path, key):
+    v = next(v for v in path.name.split('_') if v.startswith(key))
+    v = v.lstrip(key)
+    return float(v)
+
+def get_best_saved_policy(policy_dir, metric="AvgEvalReturn"):
+    """
+    E.g. from a policy_dir containing
+        SavedPolicy_Step1_AvgEvalReturn13.4
+        SavedPolicy_Step2_AvgEvalReturn73.1
+        SavedPolicy_Step9_AvgEvalReturn100
+        SavedPolicy_Step3_AvgEvalReturn0
+    return 100.0
+    """
+    if not os.path.isdir(policy_dir):
+        return None, -math.inf
+    get_value = lambda path: metric_value_from_filename(path, metric)
+    best_policy_path = max(os.scandir(policy_dir), key=get_value)
+    return best_policy_path.path, get_value(best_policy_path)

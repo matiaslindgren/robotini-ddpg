@@ -56,7 +56,7 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
         "collection": os.path.join(cache_dir, "collection"),
         "training": os.path.join(cache_dir, "training"),
         "evaluation": os.path.join(cache_dir, "evaluation"),
-        "policies": os.path.join(cache_dir, "policies"),
+        "saved_policies": os.path.join(cache_dir, "saved_policies"),
     }
     summary_writers = {
             k: tf.summary.create_file_writer(cache_dirs[k])
@@ -201,14 +201,17 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
         logging.info('\n' + '\n'.join(metrics_str))
 
         eval_avg_return = next(m for m in evaluation_metrics if m.name == "AverageReturn")
+        eval_avg_return = eval_avg_return.result().numpy()
         policy_save_dir = os.path.join(
-                cache_dirs["policies"],
-                "{:d}_Step{:d}".format(
+                cache_dirs["saved_policies"],
+                "{:d}_Step{:d}_AvgEvalReturn{:d}".format(
                     round(time.time()),
-                    tf_agent.train_step_counter.numpy()),
-                "AvgEvalReturn{:d}".format(round(eval_avg_return.result().numpy())))
-        logger.info("Saving policy to '%s'", policy_save_dir)
-        eval_policy_saver.save(policy_save_dir)
+                    tf_agent.train_step_counter.numpy(),
+                    round(eval_avg_return)))
+        _, best_value_so_far = util.get_best_saved_policy(cache_dirs["saved_policies"])
+        if eval_avg_return > best_value_so_far:
+            logger.info("Saving new best policy to '%s'", policy_save_dir)
+            eval_policy_saver.save(policy_save_dir)
 
 
 def run(config_path, cache_dir, **kwargs):
