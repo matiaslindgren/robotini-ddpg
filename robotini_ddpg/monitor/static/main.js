@@ -31,8 +31,11 @@ function readAllChunks(readableStream, teamIds) {
 				updateTeamContainer(parsed);
 				chunks = [];
 			} catch {
-				chunks.push(decoded);
-				console.log(chunks.length, "chunks");
+				if (chunks.length < 10) {
+					chunks.push(decoded);
+				} else {
+					chunks = [];
+				}
 			}
 			if (done) {
 				console.log("End of stream, reconnecting...");
