@@ -112,8 +112,9 @@ class CarConnection:
         while True:
             try:
                 buf = self.frame_queue.get(block=wait_on_first > 0, timeout=wait_on_first)
-                if buf:
-                    yield camera.buffer_to_frame(buf)
+                frame = camera.buffer_to_frame(buf)
+                if frame is not None:
+                    yield frame
                 wait_on_first = 0
             except queue.Empty:
                 return
