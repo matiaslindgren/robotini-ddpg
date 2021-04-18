@@ -1,5 +1,6 @@
 import argparse
 import json
+import logging
 import sys
 import time
 
@@ -14,30 +15,30 @@ def run(fps_limit, redis_socket_path, monitored_team_ids, host, port):
     redis = Redis(unix_socket_path=redis_socket_path)
     app = Flask(__name__)
 
-    def generate_stream(team_id):
-        state_json = b''
+    def generate_stream():
+        state = len(monitored_team_ids)*[b'{}']
         next_frame = time.perf_counter()
         while True:
             next_frame += 1/fps_limit
-            try:
-                new_state_json = redis.hget(team_id, "state_snapshot.json")
-                if new_state_json:
-                    state_json = new_state_json
-                if state_json:
-                    yield state_json + b"\r\n"
-            except ConnectionError:
-                app.logger.exception("redis connection error")
-                next_frame += 3
+            for i, team_id in enumerate(monitored_team_ids):
+                state[i] = redis.hget(team_id, "state_snapshot.json") or b'{}'
+            yield b'[' + b','.join(state) + b']' + b'\r\n'
             sleep_until(next_frame)
 
     @app.route("/")
     def index():
         return render_template("index.html", team_ids=monitored_team_ids)
 
-    @app.route("/stream/<team_id>")
-    def stream(team_id):
-        return Response(generate_stream(team_id), mimetype="application/json")
+    @app.route("/team-ids")
+    def team_ids():
+        return {"teamIds": monitored_team_ids}
 
+    @app.route("/stream")
+    def stream():
+        return Response(generate_stream(), mimetype="application/json")
+
+    app.logger.setLevel(logging.INFO)
+    app.logger.info("monitored ids: '%s'", ' '.join(monitored_team_ids))
     app.run(host=host, port=port, debug=False)
 
 

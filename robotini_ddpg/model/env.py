@@ -89,6 +89,7 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
         sim = simulator_state
         x_img, y_img = features.observation_to_xy_images(episode["observation"])
         return {
+            "team_id": self.env_id,
             "car_id": self.manager.get_car(self.env_id).car_id,
             "car_color": self.manager.teams[self.env_id].color,
             "episode": epoch["episode"],

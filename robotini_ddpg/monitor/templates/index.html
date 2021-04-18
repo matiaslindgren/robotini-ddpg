@@ -38,7 +38,6 @@
     </style>
   </head>
   <body>
-    <script>var teamIds = [];</script>
     <div class="car-container">
       {% for team_id in team_ids %}
       <div id="{{ team_id }}">
@@ -49,7 +48,6 @@
           <img class="observationX" />
         </div>
       </div>
-      <script>teamIds.push("{{ team_id }}");</script>
       {% endfor %}
     </div>
     <script src="{{ url_for('static', filename='main.js') }}"></script>
