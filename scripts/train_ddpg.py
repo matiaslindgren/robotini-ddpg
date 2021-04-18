@@ -66,10 +66,12 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
     train_team_ids = team_ids[:conf.num_train_envs]
     eval_team_ids = team_ids[conf.num_train_envs:]
 
+    env_kwargs = dict(conf.env_kwargs, redis_socket_path=redis_socket_path)
+
     train_teams, train_env = env.create_batched_tf_env(
-            train_team_ids, redis_socket_path, car_socket_url)
+            train_team_ids, car_socket_url, env_kwargs)
     eval_teams, eval_env = env.create_batched_tf_env(
-            eval_team_ids, redis_socket_path, car_socket_url)
+            eval_team_ids, car_socket_url, env_kwargs)
 
     tf_agent = ddpg.create_agent(
             train_env.time_step_spec(),

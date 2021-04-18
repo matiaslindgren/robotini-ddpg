@@ -11,7 +11,12 @@ from robotini_ddpg.simulator import manager
 
 def run(policy_dir, car_socket_url, log_socket_url, redis_socket_path, num_episodes):
     policy = tf.saved_model.load(policy_dir)
-    teams, run_env = env.create_batched_tf_env(["DDPG-1", "DDPG-2"], redis_socket_path, car_socket_url)
+    env_kwargs = {
+        "redis_socket_path": redis_socket_path,
+        "max_steps_per_episode": 1000,
+        "laps_per_episode": 2,
+    }
+    teams, run_env = env.create_batched_tf_env(["DDPG-1", "DDPG-2"], car_socket_url, env_kwargs)
     driver = dynamic_episode_driver.DynamicEpisodeDriver(
             run_env,
             policy,

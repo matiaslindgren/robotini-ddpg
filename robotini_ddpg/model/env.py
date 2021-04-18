@@ -19,18 +19,15 @@ from robotini_ddpg.model import features
 from robotini_ddpg.simulator import camera, log_parser, manager
 
 
-fps_limit = 60
-num_laps_per_episode = 2
-max_num_steps_per_episode = 4000
-
-
 class RobotiniCarEnv(py_environment.PyEnvironment):
 
-    def __init__(self, env_id, redis_socket_path):
+    def __init__(self, env_id, redis_socket_path, laps_per_episode, max_steps_per_episode, fps_limit=60):
         self.manager = None
         self.env_id = env_id
         self.redis = Redis(unix_socket_path=redis_socket_path)
         self.step_interval_sec = 1.0/fps_limit
+        self.laps_per_episode = laps_per_episode
+        self.max_steps_per_episode = max_steps_per_episode
         # Continuous action of 2 values: [forward, turn]
         self._action_spec = array_spec.BoundedArraySpec(
                 shape=[2],
@@ -191,11 +188,11 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
         self.write_state_snapshot(self.get_state_snapshot(sim_state))
 
         # End episode if car did enough laps
-        if episode["lap_count"] >= num_laps_per_episode:
+        if episode["lap_count"] >= self.laps_per_episode:
             logging.debug("'%s' - end episode at step %d after %d laps",
                     self.env_id, episode["step_num"], episode["lap_count"])
             return self.terminate(observation, reward=0)
-        if episode["step_num"] >= max_num_steps_per_episode:
+        if episode["step_num"] >= self.max_steps_per_episode:
             logging.debug("'%s' - end episode at step %d, too many steps for one episode",
                     self.env_id, episode["step_num"])
             return self.terminate(observation, reward=0)
@@ -204,8 +201,8 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
         return self.transition(observation, reward=reward)
 
 
-def create_batched_tf_env(team_ids, redis_socket_path, car_socket_url, isolation=False):
-    car_envs = [RobotiniCarEnv(team_id, redis_socket_path) for team_id in team_ids]
+def create_batched_tf_env(team_ids, car_socket_url, env_kwargs, isolation=False):
+    car_envs = [RobotiniCarEnv(team_id, **env_kwargs) for team_id in team_ids]
     teams = list(manager.teams_from_envs(car_envs, car_socket_url))
 
     batch_env = batched_py_environment.BatchedPyEnvironment(car_envs, multithreading=not isolation)

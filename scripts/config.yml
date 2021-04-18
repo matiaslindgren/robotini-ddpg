@@ -23,7 +23,7 @@ num_eval_envs: 2
 # initial_collect_batches: 1
 
 train_batches_per_epoch: 10
-collect_batches_per_epoch: 2
+collect_batches_per_epoch: 1
 initial_collect_batches: 10
 
 train_sequence_length: 120
@@ -32,3 +32,8 @@ replay_buffer_max_length: 400_000
 num_eval_episodes: 2
 
 use_tf_functions: true
+
+env_kwargs:
+  fps_limit: 60
+  laps_per_episode: 2
+  max_steps_per_episode: 2000
