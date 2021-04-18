@@ -98,7 +98,7 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
         tf_metrics.AverageReturnMetric,
         tf_metrics.AverageEpisodeLengthMetric,
     )
-    collection_metrics [M(batch_size=conf.num_train_envs) for M in metric_classes]
+    collection_metrics = [M(batch_size=conf.num_train_envs) for M in metric_classes]
     evaluation_metrics = [M(batch_size=conf.num_eval_envs, buffer_size=conf.num_eval_episodes) for M in metric_classes]
 
     replay_buffer = tf_uniform_replay_buffer.TFUniformReplayBuffer(
