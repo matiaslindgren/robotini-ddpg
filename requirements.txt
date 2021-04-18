@@ -1,0 +1,12 @@
+numpy ~= 1.20.1
+matplotlib ~= 3.4.1
+scipy ~= 1.6.1
+opencv-python ~= 4.1.0
+
+tensorflow-gpu ~= 2.4.1
+tf-agents ~= 0.7.1
+tensorboard ~= 2.4.1
+
+PyYAML ~= 5.4.1
+flask ~= 1.0.2
+redis ~= 3.5.3
