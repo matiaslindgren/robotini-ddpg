@@ -13,7 +13,6 @@ setuptools.setup(
     python_requires=">= 3.9.*",
     packages=[
         "robotini_ddpg",
-        "robotini_ddpg.model",
         "robotini_ddpg.simulator",
         "robotini_ddpg.monitor",
     ],

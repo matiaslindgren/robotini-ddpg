@@ -6,7 +6,7 @@ import tensorflow as tf
 from tf_agents.policies import tf_policy
 from tf_agents.trajectories import policy_step, trajectory
 
-from robotini_ddpg.model import features
+from robotini_ddpg.features import compute_turn_from_color_mass
 
 
 class BlueSnailPolicy(tf_policy.TFPolicy):
@@ -15,7 +15,7 @@ class BlueSnailPolicy(tf_policy.TFPolicy):
         super().__init__(*args, **kwargs)
 
     def _action(self, time_step, policy_state, seed):
-        turn = features.turn_from_color_mass(time_step.observation)
+        turn = compute_turn_from_color_mass(time_step.observation)
         forward = tf.repeat(tf.constant([self.forward_action]), turn.shape[0])
         action = tf.stack((forward, turn), axis=1)
         return policy_step.PolicyStep(action, policy_state)

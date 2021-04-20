@@ -6,7 +6,6 @@ import time
 
 from flask import Flask, render_template, Response
 from redis import Redis
-from redis.exceptions import ConnectionError
 
 from robotini_ddpg.util import sleep_until
 

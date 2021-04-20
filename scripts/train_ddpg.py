@@ -18,7 +18,7 @@
 # limitations under the License.
 # ---------------------------------------
 """
-Training script for DDPG.
+Main training script for creating a DDPG agent for the Robotini Racing Simulator.
 """
 import argparse
 import logging
@@ -37,9 +37,9 @@ from tf_agents.policies import policy_saver, ou_noise_policy
 from tf_agents.replay_buffers import tf_uniform_replay_buffer
 from tf_agents.utils import common
 
-from robotini_ddpg.model import env, snail, ddpg
-from robotini_ddpg.simulator import manager
-from robotini_ddpg import util
+from robotini_ddpg.simulator.manager import SimulatorManager
+from robotini_ddpg.simulator.environment import create_batched_robotini_env
+from robotini_ddpg import util, agent
 
 
 logger = util.reset_logger()
@@ -65,14 +65,14 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
 
     env_kwargs = dict(conf.env_kwargs, redis_socket_path=redis_socket_path)
 
-    train_teams, train_env = env.create_batched_tf_env(
+    train_teams, train_env = create_batched_robotini_env(
             train_team_ids, car_socket_url, env_kwargs)
-    eval_teams, eval_env = env.create_batched_tf_env(
+    eval_teams, eval_env = create_batched_robotini_env(
             eval_team_ids, car_socket_url, env_kwargs)
 
-    target_update_period = conf.target_updates_per_epoch/conf.train_batches_per_epoch
+    target_update_period = conf.train_batches_per_epoch/conf.target_updates_per_epoch
     ddpg_kwargs = dict(conf.ddpg_kwargs, target_update_period=max(1, int(target_update_period)))
-    tf_agent = ddpg.create_agent(
+    tf_agent = agent.create_ddpg_agent(
         train_env.time_step_spec(),
         train_env.action_spec(),
         conf.actor,
@@ -100,22 +100,6 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
             max_length=conf.replay_buffer_max_length,
             dataset_drop_remainder=True)
 
-    snail_policy = snail.BlueSnailPolicy(
-        train_env.time_step_spec(),
-        train_env.action_spec(),
-        clip=True)
-    exploring_snail_policy = ou_noise_policy.OUNoisePolicy(
-            snail_policy,
-            ou_stddev=0.1,
-            ou_damping=0.5,
-            clip=True)
-
-    initial_collect_driver = dynamic_step_driver.DynamicStepDriver(
-            train_env,
-            exploring_snail_policy,
-            observers=[replay_buffer.add_batch] + collection_metrics,
-            num_steps=conf.batch_size*conf.train_sequence_length*conf.collect_batches_per_epoch)
-
     collect_driver = dynamic_step_driver.DynamicStepDriver(
             train_env,
             tf_agent.collect_policy,
@@ -134,11 +118,9 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
 
     # Initialize replay buffer by doing some exploration in the simulator
     car_suffix = "init"
-    with manager.SimulatorManager(train_teams, log_socket_url, redis_socket_path, car_suffix+"_explore"):
-        logger.info("Moving to starting line")
-        snail.run_snail_until_finish_line(train_env)
+    with SimulatorManager(train_teams, log_socket_url, redis_socket_path, car_suffix+"_explore"):
         logger.info("Collecting initial experience")
-        initial_collect_driver.run()
+        collect_driver.run()
     logging.info('\n' + '\n'.join(util.format_metric(m) for m in collection_metrics))
 
     # Dataset generates trajectories with shape [BxTx...]
@@ -172,16 +154,14 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
                 replay_buffer._num_frames().numpy())
         car_suffix = "epoch{:d}".format(epoch)
 
-        with manager.SimulatorManager(train_teams, log_socket_url, redis_socket_path, car_suffix+"_explore"):
-            logger.info("Moving to starting line")
-            snail.run_snail_until_finish_line(train_env)
+        with SimulatorManager(train_teams, log_socket_url, redis_socket_path, car_suffix+"_explore"):
             logger.info("Collecting experience")
             time_step, policy_state = collect_driver.run(
                     time_step=time_step,
                     policy_state=policy_state)
         logging.info('\n' + '\n'.join(util.format_metric(m) for m in collection_metrics))
-        if util.find_first(collection_metrics, "AverageEpisodeLengthMetric").result() == 0:
-            logging.warning("Not writing episode summaries for collection metrics since no car managed to do a full episode")
+        if util.find_first(collection_metrics, "AverageEpisodeLength").result() == 0:
+            logging.info("Not writing episode summaries for collection metrics since no car managed to do a full episode")
         else:
             with summary_writers["collection"].as_default():
                 for m in collection_metrics:
@@ -206,9 +186,7 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
 
         if epoch == 1 or tf_agent.train_step_counter.numpy() % conf.eval_interval == 0:
             logger.info("Evaluating actor policy")
-            with manager.SimulatorManager(eval_teams, log_socket_url, redis_socket_path, car_suffix+"_eval"):
-                logger.info("Moving to starting line")
-                snail.run_snail_until_finish_line(eval_env)
+            with SimulatorManager(eval_teams, log_socket_url, redis_socket_path, car_suffix+"_eval"):
                 logger.info("Evaluating")
                 evaluation_driver.run(
                         time_step=None,

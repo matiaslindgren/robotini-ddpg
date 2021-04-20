@@ -4,7 +4,7 @@ from tf_agents.agents.ddpg import critic_rnn_network
 from tf_agents.agents.ddpg import ddpg_agent
 
 
-def create_agent(time_step_spec, action_spec, actor_conf, critic_conf, ddpg_kwargs):
+def create_ddpg_agent(time_step_spec, action_spec, actor_conf, critic_conf, ddpg_kwargs):
     actor = actor_rnn_network.ActorRnnNetwork(
         time_step_spec.observation,
         action_spec,

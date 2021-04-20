@@ -9,20 +9,19 @@ from sklearn.preprocessing import minmax_scale
 from robotini_ddpg.simulator.camera import rgb_idx
 
 
-n_x = n_y = 3
+n_x = n_y = 4
 observation_shape = (n_x+n_y, 3)
 
 speed_penalty_threshold = 0.5
-complete_lap_bonus = 100.0
 complete_track_segment_bonus = 10.0
 crash_penalty = 10.0
 max_track_angle = 90.0
 
 class RewardWeight:
-    speed = 0.5
-    crash = 1.0
-    track_segment_passed = 1.0
-    wrong_direction = 2.0
+    speed = 0.1
+    crash = 0.5
+    track_segment_passed = 0.5
+    wrong_direction = 1.0
 
 
 def reward(episode_state, epoch_state, simulator_state):
@@ -37,12 +36,6 @@ def reward(episode_state, epoch_state, simulator_state):
     # Crash, penalty. More speed, more penalty
     if sim["crash_count"] > epoch["crash_count"]:
         total -= RewardWeight.crash * crash_penalty * (1 + abs(episode["speed"]))
-
-    # Complete lap, big bonus
-    if sim["lap_count"] > epoch["lap_count"]:
-        # Slower lap => less bonus, clip at 1 second lap time (minimum/best possible)
-        lap_time_weight = 1.0 / np.clip(sim["lap_time"], 1, None)
-        total += RewardWeight.track_segment_passed * lap_time_weight * complete_lap_bonus
 
     # track_segment will be negative after car spawn until it reaches the starting line
     if sim["track_segment"] >= 0:
@@ -85,8 +78,7 @@ def component_sum(v, c):
     s = tf.reduce_sum(v[:,:,c], axis=1)
     return tf.clip_by_value(s, 0, 100)
 
-
-def turn_from_color_mass(observation):
+def compute_turn_from_color_mass(observation):
     y = observation[:,n_x:]
     yr = component_sum(y, rgb_idx.R)
     yg = component_sum(y, rgb_idx.G)

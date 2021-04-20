@@ -14,8 +14,7 @@ from tf_agents.environments import tf_py_environment, batched_py_environment
 from tf_agents.specs import array_spec
 from tf_agents.trajectories import time_step as ts
 
-from robotini_ddpg.util import sleep_until
-from robotini_ddpg.model import features
+from robotini_ddpg import features, util
 from robotini_ddpg.simulator import camera, log_parser, manager
 
 
@@ -129,7 +128,7 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
         self.manager.send_command(self.env_id, {"action": "turn", "value": float(action[1])})
 
     def transition(self, observation, **ts_kwargs):
-        sleep_until(self.episode_state["next_step_time"])
+        util.sleep_until(self.episode_state["next_step_time"])
         return ts.transition(observation, **ts_kwargs)
 
     def terminate(self, observation, **ts_kwargs):
@@ -202,7 +201,7 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
         return self.transition(observation, reward=reward)
 
 
-def create_batched_tf_env(team_ids, car_socket_url, env_kwargs, isolation=False):
+def create_batched_robotini_env(team_ids, car_socket_url, env_kwargs, isolation=False):
     car_envs = [RobotiniCarEnv(team_id, **env_kwargs) for team_id in team_ids]
     teams = list(manager.teams_from_envs(car_envs, car_socket_url))
 
