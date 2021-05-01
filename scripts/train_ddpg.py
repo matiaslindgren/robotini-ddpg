@@ -147,7 +147,7 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
     time_step = None
     policy_state = tf_agent.collect_policy.get_initial_state(train_env.batch_size)
 
-    for epoch in range(1, conf.num_epochs+1):
+    for epoch in range(1, conf.max_num_epochs+1):
         logging.info("Epoch %d - training step: %d, frames in replay buffer: %d",
                 epoch,
                 tf_agent.train_step_counter.numpy(),
@@ -187,7 +187,6 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
         if epoch == 1 or tf_agent.train_step_counter.numpy() % conf.eval_interval == 0:
             logger.info("Evaluating actor policy")
             with SimulatorManager(eval_teams, log_socket_url, redis_socket_path, car_suffix+"_eval"):
-                logger.info("Evaluating")
                 evaluation_driver.run(
                         time_step=None,
                         policy_state=tf_agent.policy.get_initial_state(eval_env.batch_size))

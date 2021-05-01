@@ -3,18 +3,18 @@ env_kwargs:
   laps_per_episode: 2
   max_steps_per_episode: 2000
   forward_range: [0.03, 0.1]
-  turn_range: [-0.4, 0.4]
+  turn_range: [-0.8, 0.8]
 
 actor:
   kwargs:
-    input_fc_layer_params: [256, 128]
+    input_fc_layer_params: [512, 256, 128]
     lstm_size: [128]
     output_fc_layer_params: [256, 128]
   learning_rate: 0.0001
 
 critic:
   kwargs:
-    observation_fc_layer_params: [256, 128]
+    observation_fc_layer_params: [512, 256, 128]
     action_fc_layer_params: [128]
     joint_fc_layer_params: [128]
     lstm_size: [128]
@@ -23,14 +23,14 @@ critic:
 
 target_updates_per_epoch: 1
 ddpg_kwargs:
-  target_update_tau: 0.01
+  target_update_tau: 0.008
   gamma: 0.99
   ou_stddev: 0.1
   ou_damping: 0.1
   summarize_grads_and_vars: true
   debug_summaries: false
 
-num_epochs: 500
+max_num_epochs: 1000
 num_train_envs: 8
 num_eval_envs: 2
 
@@ -40,7 +40,7 @@ initial_collect_batches: 9
 num_eval_episodes: 2
 eval_interval: 120
 
-train_sequence_length: 120
+train_sequence_length: 40
 batch_size: 64
-replay_buffer_max_length: 400_000
+replay_buffer_max_length: 1_000_000
 use_tf_functions: true
