@@ -54,7 +54,7 @@ class Config:
 def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
     cache_dirs = {
         k: os.path.join(cache_dir, k)
-        for k in ["collection", "training", "evaluation", "saved_policies"]}
+        for k in ["collection", "training", "evaluation", "saved_policies", "checkpoints"]}
     summary_writers = {
         k: tf.summary.create_file_writer(cache_dirs[k])
         for k in ["collection", "training", "evaluation"]}
@@ -143,6 +143,15 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
             batch_size=eval_env.batch_size,
             train_step=tf_agent.train_step_counter)
 
+    train_checkpointer = common.Checkpointer(
+            ckpt_dir=cache_dirs["checkpoints"],
+            max_to_keep=2,
+            agent=tf_agent,
+            policy=tf_agent.policy,
+            replay_buffer=replay_buffer,
+            global_step=tf_agent.train_step_counter)
+    train_checkpointer.initialize_or_restore()
+
     # Start main training loop
     time_step = None
     policy_state = tf_agent.collect_policy.get_initial_state(train_env.batch_size)
@@ -207,6 +216,8 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
             if eval_avg_return > best_value_so_far:
                 logger.info("Saving new best policy to '%s'", policy_save_dir)
                 eval_policy_saver.save(policy_save_dir)
+
+        train_checkpointer.save(tf_agent.train_step_counter)
 
         for m in collection_metrics + evaluation_metrics:
             m.reset()
