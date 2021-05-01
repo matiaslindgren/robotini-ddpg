@@ -45,7 +45,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--fps-limit", type=int, default=20)
     parser.add_argument("--port", type=int, default=8080)
-    parser.add_argument("--host", type=str, default="0.0.0.0")
+    parser.add_argument("--host", type=str, default="127.0.0.1")
     parser.add_argument("redis_socket_path", type=str)
     parser.add_argument("monitored_team_ids", nargs="+")
     args, sys.argv[1:] = parser.parse_known_args()
