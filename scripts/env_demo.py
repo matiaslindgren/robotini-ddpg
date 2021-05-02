@@ -1,4 +1,5 @@
 import argparse
+import logging
 import os
 import sys
 
@@ -10,7 +11,9 @@ from tf_agents.metrics import tf_metrics
 
 from robotini_ddpg.simulator.manager import SimulatorManager
 from robotini_ddpg.simulator.environment import create_batched_robotini_env
-from robotini_ddpg import snail_policy
+from robotini_ddpg import snail_policy, util
+
+util.reset_logger(level=logging.DEBUG)
 
 
 def run(config_path, car_socket_url, log_socket_url, redis_socket_path, num_cars, num_steps, isolate_envs):

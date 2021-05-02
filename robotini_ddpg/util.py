@@ -26,10 +26,10 @@ def join_or_terminate(proc, timeout):
         logging.warning("Process %s did not terminate during join, killing process", proc.name)
         proc.terminate()
 
-def reset_logger(name=None):
+def reset_logger(name=None, level=logging.INFO):
     remove_logger(name)
     l = logging.getLogger(name)
-    l.setLevel(logging.INFO)
+    l.setLevel(level)
     fmt = logging.Formatter(fmt=r"%(asctime)s:%(levelname)s:%(message)s", datefmt=r"%s")
     sh = logging.StreamHandler()
     sh.setFormatter(fmt)
