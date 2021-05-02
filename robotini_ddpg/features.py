@@ -1,6 +1,8 @@
 """
 Feature engineering, pre- and post-processing, and the reward function.
 """
+import time
+
 import tensorflow as tf
 import numpy as np
 from scipy.ndimage import zoom
@@ -9,20 +11,19 @@ from sklearn.preprocessing import minmax_scale
 from robotini_ddpg.simulator.camera import rgb_idx
 
 
-n_x = n_y = 4
+n_x = n_y = 2
 observation_shape = (n_x+n_y, 3)
 
-speed_penalty_threshold = 0.5
-complete_track_segment_bonus = 10.0
-complete_lap_bonus = 200.0
-crash_penalty = 10.0
+complete_track_segment_bonus = 2.0
+complete_lap_bonus = 100.0
+crash_penalty = 5.0
 max_track_angle = 90.0
 
 class RewardWeight:
-    speed = 0.1
-    crash = 0.5
-    track_segment_passed = 0.5
     wrong_direction = 1.0
+    track_segment_time = 1.0
+    crash = 0.5
+    track_segment_passed = 0.1
 
 
 def reward(episode_state, epoch_state, simulator_state):
@@ -31,18 +32,18 @@ def reward(episode_state, epoch_state, simulator_state):
     sim = simulator_state
     total = 0.0
 
-    # More speed, more reward
-    total += RewardWeight.speed * (episode["speed"] - speed_penalty_threshold)
-
     # Complete track segment (not finish line), smol bonus
     if sim["track_segment"] > 0 and sim["track_segment"] == episode["track_segment"] + 1:
-        total += RewardWeight.track_segment_passed * complete_track_segment_bonus
+        # Faster completion, more bonus
+        segment_time = episode["env_step_clock"] - episode["track_segment_begin_clock"]
+        segment_time_weight = RewardWeight.track_segment_time / (0.1 + segment_time)
+        total += RewardWeight.track_segment_passed * complete_track_segment_bonus * segment_time_weight
 
-    # Complete lap, big bonus
-    if sim["lap_count"] > epoch["lap_count"]:
-        # Slower lap => less bonus, clip at 1 second lap time (minimum/best possible)
-        lap_time_weight = 1.0 / np.clip(sim["lap_time"], 1, None)
-        total += RewardWeight.track_segment_passed * lap_time_weight * complete_lap_bonus
+    # # Complete lap, big bonus
+    # if sim["lap_count"] > epoch["lap_count"]:
+    #     # Slower lap => less bonus, clip at 1 second lap time (minimum/best possible)
+    #     lap_time_weight = 1.0 / np.clip(sim["lap_time"], 1, None)
+    #     total += RewardWeight.track_segment_passed * lap_time_weight * complete_lap_bonus
 
     # Crash, penalty. More speed, more penalty
     if sim["crash_count"] > epoch["crash_count"]:
