@@ -81,6 +81,9 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
     tf_agent._actor_network.summary(print_fn=logging.info)
     tf_agent._critic_network.summary(print_fn=logging.info)
 
+    def get_training_step():
+        return int(tf_agent.train_step_counter.numpy())
+
     logger.info(("\nStart the agent monitor webapp with:\n\n"
                  "%s robotini_ddpg/monitor/webapp.py %s %s\n"),
                 os.environ["PYTHON_BIN"], redis_socket_path, ' '.join(team_ids))
@@ -145,7 +148,7 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
 
     train_checkpointer = common.Checkpointer(
             ckpt_dir=cache_dirs["checkpoints"],
-            max_to_keep=2,
+            max_to_keep=conf.max_checkpoints_to_keep,
             agent=tf_agent,
             policy=tf_agent.policy,
             replay_buffer=replay_buffer,
@@ -159,9 +162,9 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
     for epoch in range(1, conf.max_num_epochs+1):
         logging.info("Epoch %d - training step: %d, frames in replay buffer: %d",
                 epoch,
-                tf_agent.train_step_counter.numpy(),
+                get_training_step(),
                 replay_buffer._num_frames().numpy())
-        car_suffix = "epoch{:d}".format(epoch)
+        car_suffix = "step{:d}".format(get_training_step())
 
         with SimulatorManager(train_teams, log_socket_url, redis_socket_path, car_suffix+"_explore"):
             logger.info("Collecting experience")
@@ -193,7 +196,7 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
             ]
             logging.info('\n' + '\n'.join(metrics_str))
 
-        if epoch == 1 or tf_agent.train_step_counter.numpy() % conf.eval_interval == 0:
+        if epoch == 1 or get_training_step() % conf.eval_interval == 0:
             logger.info("Evaluating actor policy")
             with SimulatorManager(eval_teams, log_socket_url, redis_socket_path, car_suffix+"_eval"):
                 evaluation_driver.run(
@@ -210,14 +213,15 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
                     cache_dirs["saved_policies"],
                     "{:d}_Step{:d}_AvgEvalReturn{:d}".format(
                         round(time.time()),
-                        tf_agent.train_step_counter.numpy(),
+                        get_training_step(),
                         round(eval_avg_return)))
             _, best_value_so_far = util.get_best_saved_policy(cache_dirs["saved_policies"])
             if eval_avg_return > best_value_so_far:
                 logger.info("Saving new best policy to '%s'", policy_save_dir)
                 eval_policy_saver.save(policy_save_dir)
 
-        train_checkpointer.save(tf_agent.train_step_counter)
+        if get_training_step() % conf.checkpoint_interval == 0:
+            train_checkpointer.save(tf_agent.train_step_counter)
 
         for m in collection_metrics + evaluation_metrics:
             m.reset()

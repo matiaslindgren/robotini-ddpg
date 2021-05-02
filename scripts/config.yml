@@ -44,3 +44,6 @@ train_sequence_length: 40
 batch_size: 64
 replay_buffer_max_length: 1_000_000
 use_tf_functions: true
+
+checkpoint_interval: 1000
+max_checkpoints_to_keep: 20
