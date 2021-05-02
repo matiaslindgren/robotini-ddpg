@@ -48,3 +48,10 @@ run_trained_policy:
 		--log-socket-url $(LOG_SOCKET_URL) \
 		--redis-socket-path $(REDIS_SOCKET) \
 		--policy-dir $(SAVED_POLICY_DIR)
+
+run_debug_policy:
+	$(PYTHON_BIN) scripts/env_demo.py \
+		--car-socket-url $(CAR_SOCKET_URL) \
+		--log-socket-url $(LOG_SOCKET_URL) \
+		--redis-socket-path $(REDIS_SOCKET) \
+		--config-path $(CONFIG_PATH)
