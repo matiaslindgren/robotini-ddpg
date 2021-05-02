@@ -20,13 +20,13 @@ from robotini_ddpg.simulator import camera, log_parser, manager
 
 class RobotiniCarEnv(py_environment.PyEnvironment):
 
-    def __init__(self, env_id, redis_socket_path, laps_per_episode, max_steps_per_episode, forward_range, turn_range, fps_limit=60):
+    def __init__(self, env_id, redis_socket_path, laps_per_episode, max_env_steps_per_episode, forward_range, turn_range, fps_limit=60):
         self.manager = None
         self.env_id = env_id
         self.redis = Redis(unix_socket_path=redis_socket_path)
         self.step_interval_sec = 1.0/fps_limit
         self.laps_per_episode = laps_per_episode
-        self.max_steps_per_episode = max_steps_per_episode
+        self.max_env_steps_per_episode = max_env_steps_per_episode
         # Continuous action of 2 values: [forward, turn]
         self._action_spec = array_spec.BoundedArraySpec(
                 shape=[2],
@@ -58,14 +58,14 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
     def zero_state(self):
         epoch = self.epoch_state
         return {
-            "step_num": 0,
+            "env_step": 0,
             "episode": epoch["episode"],
             "track_segment": epoch["track_segment"],
             "distance": 0,
             "crash_count": 0,
             "return": 0,
             "lap_count": 0,
-            "next_step_time": time.perf_counter(),
+            "next_env_step_time": time.perf_counter(),
             "init_crash_count": epoch["crash_count"],
             "init_lap_count": epoch["lap_count"],
         }
@@ -95,13 +95,13 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
             "original_frame": camera.frame_to_base64(episode["original_frame"]),
             "observation_x": camera.frame_to_base64(x_img),
             "observation_y": camera.frame_to_base64(y_img),
-            "step_num": int(episode["step_num"]),
+            "env_step": int(episode["env_step"]),
             "speed": float(episode["speed"]),
             "action": episode["action"].tolist(),
             "return": float(episode["return"]),
             "distance": float(episode["distance"]),
             "position": sim["position"].tolist(),
-            "rotation": sim["rotation"].tolist(),
+            # "rotation": sim["rotation"].tolist(),
             "track_angle": sim["track_angle"],
             "track_segment": sim["track_segment"],
             "lap_time": sim["lap_time"],
@@ -128,7 +128,7 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
         self.manager.send_command(self.env_id, {"action": "turn", "value": float(action[1])})
 
     def transition(self, observation, **ts_kwargs):
-        util.sleep_until(self.episode_state["next_step_time"])
+        util.sleep_until(self.episode_state["next_env_step_time"])
         return ts.transition(observation, **ts_kwargs)
 
     def terminate(self, observation, **ts_kwargs):
@@ -142,10 +142,10 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
 
         episode = self.episode_state
         epoch = self.epoch_state
-        episode["step_num"] += 1
-        episode["next_step_time"] += self.step_interval_sec
+        episode["env_step"] += 1
+        episode["next_env_step_time"] += self.step_interval_sec
 
-        if episode["step_num"] == 1:
+        if episode["env_step"] == 1:
             epoch["episode"] += 1
             logging.debug("'%s' - begin episode %d", self.env_id, epoch["episode"])
 
@@ -155,10 +155,10 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
 
         # Skip step if there is no state
         if not sim_state:
-            logging.warning("'%s' - simulator state is empty, skipping step %d", self.env_id, episode["step_num"])
+            logging.warning("'%s' - simulator state is empty, skipping step %d", self.env_id, episode["env_step"])
             return self.transition(self.empty_observation(), reward=0)
         if not frames:
-            logging.warning("'%s' - camera frame buffer is empty, skipping step %d", self.env_id, episode["step_num"])
+            logging.warning("'%s' - camera frame buffer is empty, skipping step %d", self.env_id, episode["env_step"])
             return self.transition(self.empty_observation(), reward=0)
 
         # Extract model inputs from camera frame buffer
@@ -173,7 +173,7 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
             episode["distance"] += minkowski(episode["position"], sim_state["position"], 2)
         episode["position"] = sim_state["position"]
         reward = features.reward(episode, epoch, sim_state)
-        crashed = sim_state["crash_count"] > epoch["crash_count"]
+        returned_to_track = sim_state["return_to_track_count"] > epoch["return_to_track_count"]
 
         # Update state for computing reward at next step
         episode["return"] += reward
@@ -187,15 +187,21 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
         # Write JSON snapshot of current state into Redis
         self.write_state_snapshot(self.get_state_snapshot(sim_state))
 
-        # End episode if car did enough laps
         if episode["lap_count"] >= self.laps_per_episode:
+            # Enough laps, terminate episode
             logging.debug("'%s' - end episode at step %d after %d laps",
-                    self.env_id, episode["step_num"], episode["lap_count"])
-            return self.terminate(observation, reward=0)
-        if episode["step_num"] >= self.max_steps_per_episode:
+                    self.env_id, episode["env_step"], episode["lap_count"])
+            return self.terminate(observation, reward=reward)
+        if episode["env_step"] >= self.max_env_steps_per_episode:
+            # Too many steps, terminate episode
             logging.debug("'%s' - end episode at step %d, too many steps for one episode",
-                    self.env_id, episode["step_num"])
-            return self.terminate(observation, reward=0)
+                    self.env_id, episode["env_step"])
+            return self.terminate(observation, reward=reward)
+        if returned_to_track:
+            # Car position reset after crash, terminate episode
+            logging.debug("'%s' - end episode at step %d, car position reset in simulator",
+                    self.env_id, episode["env_step"])
+            return self.terminate(observation, reward=reward)
 
         # Still going, throttle FPS and transition to next step
         return self.transition(observation, reward=reward)
