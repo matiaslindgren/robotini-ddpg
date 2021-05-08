@@ -5,13 +5,12 @@ import time
 
 import tensorflow as tf
 import numpy as np
-from scipy.ndimage import zoom
 from sklearn.preprocessing import minmax_scale
 
 from robotini_ddpg.simulator.camera import rgb_idx
 
 
-n_x = n_y = 2
+n_x = n_y = 4
 observation_shape = (n_x+n_y, 3)
 
 complete_track_segment_bonus = 2.0
@@ -61,17 +60,18 @@ def reward(episode_state, epoch_state, simulator_state):
     return total
 
 
-def camera_frames_to_observation(frames):
-    frame_full = np.stack(frames).max(axis=0)
-    frame = frame_full[20:,:,:].astype(np.float32)
+def camera_frames_to_observation(frame_batch):
+    frame = np.stack(frame_batch).max(axis=0)
+    frame = frame[20:,:,:].astype(np.float32)
     x = frame.mean(axis=0)
     y = frame.mean(axis=1)
     x = minmax_scale(x, (0, 1), axis=-1)
     y = minmax_scale(y, (0, 1), axis=-1)
-    x = zoom(x, (n_x/x.shape[0], 1))
-    y = zoom(y, (n_y/y.shape[0], 1))
+    x = x.reshape((n_x, x.shape[0]//n_x) + x.shape[1:])
+    y = y.reshape((n_y, y.shape[0]//n_y) + y.shape[1:])
+    x = x.mean(axis=1)
+    y = y.mean(axis=1)
     o = np.concatenate((x, y))
-    o = np.clip(o, 0, 1)
     assert not np.isnan(o).any(), "nan inputs"
     return frame, o
 
