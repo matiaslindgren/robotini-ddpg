@@ -52,6 +52,8 @@ class Config:
 
 
 def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
+    logger.info("Using config:\n%s", yaml.dump(conf.__dict__))
+
     cache_dirs = {
         k: os.path.join(cache_dir, k)
         for k in ["collection", "training", "evaluation", "saved_policies", "checkpoints"]}
