@@ -183,10 +183,15 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
 
         # Update state for computing reward at next step
         episode["return"] += reward
-        episode["lap_count"] = sim_state["lap_count"] - epoch["lap_count"]
-        episode["crash_count"] = sim_state["crash_count"] - epoch["crash_count"]
-        epoch["lap_count"] = sim_state["lap_count"]
-        epoch["crash_count"] = sim_state["crash_count"]
+
+        lap_count = max(0, sim_state["lap_count"])
+        episode["lap_count"] = lap_count - epoch["lap_count"]
+        epoch["lap_count"] = lap_count
+
+        crash_count = max(0, sim_state["crash_count"])
+        episode["crash_count"] = crash_count - epoch["crash_count"]
+        epoch["crash_count"] = crash_count
+
         epoch["return_to_track_count"] = sim_state["return_to_track_count"]
         episode["track_segment"] = sim_state["track_segment"]
 

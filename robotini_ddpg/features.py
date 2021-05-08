@@ -20,7 +20,7 @@ max_track_angle = 90.0
 
 class RewardWeight:
     wrong_direction = 1.0
-    track_segment_time = 1.0
+    track_segment_time = 2.0
     crash = 0.5
     track_segment_passed = 0.1
 
