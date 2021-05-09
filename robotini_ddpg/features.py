@@ -3,8 +3,9 @@ Feature engineering, pre- and post-processing, and the reward function.
 """
 import time
 
-import tensorflow as tf
+import cv2
 import numpy as np
+import tensorflow as tf
 from sklearn.preprocessing import minmax_scale
 
 from robotini_ddpg.simulator.camera import rgb_idx
@@ -57,6 +58,7 @@ def reward(episode_state, epoch_state, simulator_state):
 def camera_frames_to_observation(frame_batch):
     frame = np.stack(frame_batch).max(axis=0)
     frame = frame[20:,:,:].astype(np.float32)
+    frame = threshold_rgb(frame)
     x = frame.mean(axis=0)
     y = frame.mean(axis=1)
     x = minmax_scale(x, (0, 1), axis=-1)
@@ -68,7 +70,6 @@ def camera_frames_to_observation(frame_batch):
     o = np.concatenate((x, y))
     assert not np.isnan(o).any(), "nan inputs"
     return frame, o
-
 
 def observation_to_xy_images(o, scale=10):
     x = o[:n_x]
@@ -90,3 +91,20 @@ def compute_turn_from_color_mass(observation):
     yb = component_sum(y, rgb_idx.B)
     turn = (yg - yr)/tf.clip_by_value(yb, 0.01, 10)
     return turn
+
+
+# Modified version of find_bgr_pixels_over_treshold from the Robotini Python template
+def threshold_rgb(img, threshold=100):
+    b, g, r = cv2.split(img)
+    max_px = np.maximum(np.maximum(r, g), b)
+
+    def process_channel(chan):
+        chan[chan < max_px] = 0
+        _, chan = cv2.threshold(chan, threshold, 255, cv2.THRESH_BINARY)
+        return chan
+
+    b = process_channel(b)
+    g = process_channel(g)
+    r = process_channel(r)
+
+    return cv2.merge((b, g, r))
