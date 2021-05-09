@@ -13,16 +13,15 @@ from robotini_ddpg.simulator.camera import rgb_idx
 n_x = n_y = 4
 observation_shape = (n_x+n_y, 3)
 
-complete_track_segment_bonus = 2.0
-complete_lap_bonus = 100.0
+complete_track_segment_bonus = 1.0
 crash_penalty = 5.0
-max_track_angle = 90.0
+max_track_angle = 100.0
 
 class RewardWeight:
     wrong_direction = 1.0
-    track_segment_time = 2.0
+    track_segment_time = 0.5
     crash = 0.5
-    track_segment_passed = 0.1
+    track_segment_passed = 0.2
 
 
 def reward(episode_state, epoch_state, simulator_state):
@@ -33,25 +32,20 @@ def reward(episode_state, epoch_state, simulator_state):
 
     # Complete track segment (not finish line), smol bonus
     if sim["track_segment"] > 0 and sim["track_segment"] == episode["track_segment"] + 1:
+        total += RewardWeight.track_segment_passed * complete_track_segment_bonus
         # Faster completion, more bonus
         segment_time = episode["env_step_clock"] - episode["track_segment_begin_clock"]
-        segment_time_weight = RewardWeight.track_segment_time / (0.1 + segment_time)
-        total += RewardWeight.track_segment_passed * complete_track_segment_bonus * segment_time_weight
-
-    # # Complete lap, big bonus
-    # if sim["lap_count"] > epoch["lap_count"]:
-    #     # Slower lap => less bonus, clip at 1 second lap time (minimum/best possible)
-    #     lap_time_weight = 1.0 / np.clip(sim["lap_time"], 1, None)
-    #     total += RewardWeight.track_segment_passed * lap_time_weight * complete_lap_bonus
+        total += RewardWeight.track_segment_time * complete_track_segment_bonus / (0.1 + segment_time)
 
     # Crash, penalty. More speed, more penalty
     if sim["crash_count"] > epoch["crash_count"]:
         total -= RewardWeight.crash * crash_penalty * (1 + abs(episode["speed"]))
 
     # Too large deviation from correct direction, penalty
-    delta_track_angle = sim["track_angle"] - max_track_angle
-    track_angle_penalty = np.clip(delta_track_angle / max_track_angle, 0, None)
-    total -= RewardWeight.wrong_direction * track_angle_penalty
+    if sim["track_angle"] > max_track_angle:
+        delta_track_angle = sim["track_angle"] - max_track_angle
+        track_angle_penalty = np.clip(delta_track_angle / max_track_angle, 0, None)
+        total -= RewardWeight.wrong_direction * track_angle_penalty
 
     # Crossed a segment in the wrong direction, penalty
     if sim["track_segment"] == episode["track_segment"] - 1:

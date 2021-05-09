@@ -178,22 +178,24 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
         if "position" in episode:
             episode["distance"] += minkowski(episode["position"], sim_state["position"], 2)
         episode["position"] = sim_state["position"]
+
+        # Compute reward at current env step
         reward = features.reward(episode, epoch, sim_state)
 
-        returned_to_track = sim_state["return_to_track_count"] > epoch["return_to_track_count"]
-        crossed_segment = sim_state["track_segment"] > 0 and sim_state["track_segment"] == episode["track_segment"] + 1
-
         # Update state for computing reward at next step
+        returned_to_track = sim_state["return_to_track_count"] > epoch["return_to_track_count"]
+        crossed_segment = (
+            sim_state["track_segment"] > 0 and sim_state["track_segment"] == episode["track_segment"] + 1
+            or
+            sim_state["track_segment"] == 0 and episode["track_segment"] > sim_state["track_segment"])
+
+        for count_key in ["lap_count", "crash_count"]:
+            count = max(0, sim_state[count_key])
+            if count == epoch[count_key] + 1:
+                episode[count_key] += 1
+            epoch[count_key] = count
+
         episode["return"] += reward
-
-        lap_count = max(0, sim_state["lap_count"])
-        episode["lap_count"] = lap_count - epoch["lap_count"]
-        epoch["lap_count"] = lap_count
-
-        crash_count = max(0, sim_state["crash_count"])
-        episode["crash_count"] = crash_count - epoch["crash_count"]
-        epoch["crash_count"] = crash_count
-
         epoch["return_to_track_count"] = sim_state["return_to_track_count"]
         episode["track_segment"] = sim_state["track_segment"]
 
