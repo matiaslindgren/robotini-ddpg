@@ -146,7 +146,9 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
         episode = self.episode_state
         epoch = self.epoch_state
         episode["env_step"] += 1
+        # For throttling FPS
         episode["next_env_step_time"] += self.step_interval_sec
+        # Use the same clock value in all time delta computations for this step
         episode["env_step_clock"] = time.perf_counter()
 
         if episode["env_step"] == 1:
@@ -157,7 +159,7 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
         frames, sim_state = self.get_car_state()
         self.do_action(action)
 
-        # Skip step if there is no state
+        # Skip step if there is no state, can happen if the simulator is laggy
         if not sim_state:
             logging.warning("'%s' - simulator state is empty, skipping step %d", self.env_id, episode["env_step"])
             return self.transition(self.empty_observation(), reward=0)
@@ -165,10 +167,10 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
             logging.warning("'%s' - camera frame buffer is empty, skipping step %d", self.env_id, episode["env_step"])
             return self.transition(self.empty_observation(), reward=0)
 
-        # Extract model inputs from camera frame buffer
+        # Merge camera frame buffer and extract neural net inputs
         frame, observation = features.camera_frames_to_observation(frames)
 
-        # Update state and compute reward for this step
+        # Update state for computing reward at this step
         episode["speed"] = np.linalg.norm(sim_state["velocity"])
         episode["action"] = action
         episode["observation"] = observation

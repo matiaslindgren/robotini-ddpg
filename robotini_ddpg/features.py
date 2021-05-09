@@ -80,7 +80,8 @@ def observation_to_xy_images(o, scale=10):
     x = o[:n_x]
     y = o[n_x:]
     x_img = np.tile(np.expand_dims(255*x, 0), (scale, 1, 1))
-    y_img = np.transpose(np.tile(np.expand_dims(255*y, 0), (scale, 1, 1)), (1, 0, 2))
+    y_img = np.tile(np.expand_dims(255*y, 0), (scale, 1, 1))
+    y_img = np.transpose(y_img, (1, 0, 2))
     return x_img, y_img
 
 

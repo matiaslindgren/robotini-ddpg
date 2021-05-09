@@ -7,8 +7,8 @@ SIMULATOR_HOST := 192.168.1.211
 LOG_SOCKET_URL := $(SIMULATOR_HOST):11001
 CAR_SOCKET_URL := $(SIMULATOR_HOST):11000
 REDIS_SOCKET := /tmp/robotini-ddpg.redis.sock
-CACHE_DIR := ./tf-cache
-MONITORED_TEAM_IDS := env{1..8}
+CACHE_DIR := ./tf-data
+MONITORED_TEAM_IDS := env{1..7}
 CONFIG_PATH := ./scripts/config.yml
 SAVED_POLICY_DIR := tmp-policy
 

@@ -1,6 +1,6 @@
 env_kwargs:
   fps_limit: 60
-  laps_per_episode: 2
+  laps_per_episode: 1
   max_env_steps_per_episode: 4000
   forward_range: [0.02, 0.1]
   turn_range: [-1.0, 1.0]
