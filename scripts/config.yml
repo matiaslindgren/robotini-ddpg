@@ -34,11 +34,11 @@ max_num_epochs: 1000
 num_train_envs: 6
 num_eval_envs: 1
 
-train_batches_per_epoch: 20
-collect_batches_per_epoch: 4
-initial_collect_batches: 16
+train_batches_per_epoch: 10
+collect_batches_per_epoch: 2
+initial_collect_batches: 8
 num_eval_episodes: 2
-eval_interval: 120
+eval_interval: 50
 
 train_sequence_length: 100
 batch_size: 64
