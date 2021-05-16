@@ -72,16 +72,20 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
     eval_teams, eval_env = create_batched_robotini_env(
             eval_team_ids, car_socket_url, env_kwargs)
 
-    target_update_period = conf.train_batches_per_epoch/conf.target_updates_per_epoch
-    ddpg_kwargs = dict(conf.ddpg_kwargs, target_update_period=max(1, int(target_update_period)))
-    tf_agent = agent.create_ddpg_agent(
-        explore_env.time_step_spec(),
-        explore_env.action_spec(),
+    tf_agent = agent.create(
+        conf.agent_type,
+        train_env.time_step_spec(),
+        train_env.action_spec(),
         conf.actor,
         conf.critic,
-        ddpg_kwargs)
+        dict(conf.agent_kwargs, target_update_period=max(1, int(conf.train_batches_per_epoch/conf.target_updates_per_epoch))))
+
     tf_agent._actor_network.summary(print_fn=logging.info)
-    tf_agent._critic_network.summary(print_fn=logging.info)
+    if conf.agent_type == "td3":
+        tf_agent._critic_network_1.summary(print_fn=logging.info)
+        tf_agent._critic_network_2.summary(print_fn=logging.info)
+    else:
+        tf_agent._critic_network.summary(print_fn=logging.info)
 
     def get_training_step():
         return int(tf_agent.train_step_counter.numpy())

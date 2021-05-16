@@ -21,14 +21,23 @@ critic:
     lstm_size: [256]
     output_fc_layer_params: null
 
-target_updates_per_epoch: 1
-ddpg_kwargs:
-  target_update_tau: 0.002
-  gamma: 0.99
-  ou_stddev: 0.05
-  ou_damping: 0.05
+target_updates_per_epoch: 0.5
+agent_type: td3
+agent_kwargs:
+  target_update_tau: 0.005
+  gamma: 0.95
+  exploration_noise_std: 0.05
   summarize_grads_and_vars: true
   debug_summaries: false
+
+# agent_kwargs:
+#   target_update_tau: 0.005
+#   gamma: 0.99
+#   ou_stddev: 0.05
+#   ou_damping: 0.05
+#   summarize_grads_and_vars: true
+#   debug_summaries: false
+
 
 max_num_epochs: 1000
 num_explore_envs: 4
