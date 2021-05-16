@@ -10,16 +10,16 @@ actor:
   kwargs:
     input_fc_layer_params: [512, 256]
     lstm_size: [256]
-    output_fc_layer_params: [512, 256]
+    output_fc_layer_params: null
 
 critic:
-  learning_rate: 0.001
+  learning_rate: 0.0001
   kwargs:
-    observation_fc_layer_params: [512]
-    action_fc_layer_params: [512]
-    joint_fc_layer_params: [128]
+    observation_fc_layer_params: null
+    action_fc_layer_params: null
+    joint_fc_layer_params: [512, 256]
     lstm_size: [256]
-    output_fc_layer_params: [512, 256]
+    output_fc_layer_params: null
 
 target_updates_per_epoch: 1
 ddpg_kwargs:
@@ -31,13 +31,13 @@ ddpg_kwargs:
   debug_summaries: false
 
 max_num_epochs: 1000
-num_train_envs: 6
+num_explore_envs: 4
 num_eval_envs: 1
 
-train_batches_per_epoch: 10
-collect_batches_per_epoch: 2
-initial_collect_batches: 8
-num_eval_episodes: 2
+train_batches_per_epoch: 2
+collect_batches_per_epoch: 1
+initial_collect_batches: 20
+num_eval_episodes: 10
 eval_interval: 50
 
 train_sequence_length: 100

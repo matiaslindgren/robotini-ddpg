@@ -61,22 +61,22 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
         k: tf.summary.create_file_writer(cache_dirs[k])
         for k in ["collection", "training", "evaluation"]}
 
-    team_ids = ["env{}".format(i+1) for i in range(conf.num_train_envs+conf.num_eval_envs)]
-    train_team_ids = team_ids[:conf.num_train_envs]
-    eval_team_ids = team_ids[conf.num_train_envs:]
+    team_ids = ["env{}".format(i+1) for i in range(conf.num_explore_envs+conf.num_eval_envs)]
+    explore_team_ids = team_ids[:conf.num_explore_envs]
+    eval_team_ids = team_ids[conf.num_explore_envs:]
 
     env_kwargs = dict(conf.env_kwargs, redis_socket_path=redis_socket_path)
 
-    train_teams, train_env = create_batched_robotini_env(
-            train_team_ids, car_socket_url, env_kwargs)
+    explore_teams, explore_env = create_batched_robotini_env(
+            explore_team_ids, car_socket_url, env_kwargs)
     eval_teams, eval_env = create_batched_robotini_env(
             eval_team_ids, car_socket_url, env_kwargs)
 
     target_update_period = conf.train_batches_per_epoch/conf.target_updates_per_epoch
     ddpg_kwargs = dict(conf.ddpg_kwargs, target_update_period=max(1, int(target_update_period)))
     tf_agent = agent.create_ddpg_agent(
-        train_env.time_step_spec(),
-        train_env.action_spec(),
+        explore_env.time_step_spec(),
+        explore_env.action_spec(),
         conf.actor,
         conf.critic,
         ddpg_kwargs)
@@ -96,17 +96,17 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
         tf_metrics.AverageReturnMetric,
         tf_metrics.AverageEpisodeLengthMetric,
     )
-    collection_metrics = [M(batch_size=conf.num_train_envs) for M in metric_classes]
+    collection_metrics = [M(batch_size=conf.num_explore_envs) for M in metric_classes]
     evaluation_metrics = [M(batch_size=conf.num_eval_envs, buffer_size=conf.num_eval_episodes) for M in metric_classes]
 
     replay_buffer = tf_uniform_replay_buffer.TFUniformReplayBuffer(
             tf_agent.collect_data_spec,
-            batch_size=train_env.batch_size,
+            batch_size=explore_env.batch_size,
             max_length=conf.replay_buffer_max_length,
             dataset_drop_remainder=True)
 
     collect_driver = dynamic_step_driver.DynamicStepDriver(
-            train_env,
+            explore_env,
             tf_agent.collect_policy,
             observers=[replay_buffer.add_batch] + collection_metrics,
             num_steps=conf.batch_size*conf.train_sequence_length*conf.collect_batches_per_epoch)
@@ -123,7 +123,7 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
 
     # Initialize replay buffer by doing some exploration in the simulator
     car_suffix = "init"
-    with SimulatorManager(train_teams, log_socket_url, redis_socket_path, car_suffix+"_explore"):
+    with SimulatorManager(explore_teams, log_socket_url, redis_socket_path, car_suffix+"_explore"):
         logger.info("Collecting initial experience")
         collect_driver.run()
     logging.info('\n' + '\n'.join(util.format_metric(m) for m in collection_metrics))
@@ -159,7 +159,7 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
 
     # Start main training loop
     time_step = None
-    policy_state = tf_agent.collect_policy.get_initial_state(train_env.batch_size)
+    policy_state = tf_agent.collect_policy.get_initial_state(explore_env.batch_size)
 
     for epoch in range(1, conf.max_num_epochs+1):
         logging.info("Epoch %d - training step: %d, frames in replay buffer: %d",
@@ -168,7 +168,7 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
                 replay_buffer._num_frames().numpy())
         car_suffix = "step{:d}".format(get_training_step())
 
-        with SimulatorManager(train_teams, log_socket_url, redis_socket_path, car_suffix+"_explore"):
+        with SimulatorManager(explore_teams, log_socket_url, redis_socket_path, car_suffix+"_explore"):
             logger.info("Collecting experience")
             time_step, policy_state = collect_driver.run(
                     time_step=time_step,
