@@ -2,7 +2,7 @@ env_kwargs:
   fps_limit: 60
   laps_per_episode: 1
   max_env_steps_per_episode: 4000
-  forward_range: [0.02, 0.1]
+  forward_range: [0.02, 0.15]
   turn_range: [-1.0, 1.0]
 
 actor:
@@ -47,7 +47,7 @@ train_batches_per_epoch: 2
 collect_batches_per_epoch: 1
 initial_collect_batches: 20
 num_eval_episodes: 10
-eval_interval: 50
+eval_interval: 100
 
 train_sequence_length: 100
 batch_size: 64
