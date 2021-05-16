@@ -2,6 +2,8 @@
 Simulator camera frame reader from the Robotini Python template.
 OpenCV has been replaced with TensorFlow.
 """
+import base64
+
 import numpy as np
 import tensorflow as tf
 
@@ -20,13 +22,10 @@ def read_buffer(socket):
     return buf
 
 def buffer_to_frame(buf):
-    nparr = np.frombuffer(buf, np.uint8)
-    frame = tf.io.decode_image(nparr,
-            # Return a single frame instead of a batch
-            expand_animations=False)
-    return frame.numpy()
+    img = tf.io.decode_image(buf, channels=3, dtype=tf.uint8)
+    return tf.reshape(img, frame_shape).numpy()
 
 def frame_to_base64(frame):
-    png = tf.io.encode_png(frame)
-    base64 = tf.io.encode_base64(base64)
-    return 'data:image/png;base64,' + base64.numpy().decode("utf-8")
+    jpg = tf.io.encode_jpeg(frame, format='rgb').numpy()
+    data_str = base64.b64encode(jpg).decode("utf-8")
+    return 'data:image/png;base64,' + data_str

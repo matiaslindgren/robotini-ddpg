@@ -22,14 +22,18 @@ critic:
     output_fc_layer_params: null
 
 target_updates_per_epoch: 0.5
+
 agent_type: td3
 agent_kwargs:
   target_update_tau: 0.005
-  gamma: 0.95
+  gamma: 0.98
   exploration_noise_std: 0.05
+  target_policy_noise: 0.1
+  target_policy_noise_clip: 0.2
   summarize_grads_and_vars: true
   debug_summaries: false
 
+# agent_type: ddpg
 # agent_kwargs:
 #   target_update_tau: 0.005
 #   gamma: 0.99
@@ -40,19 +44,19 @@ agent_kwargs:
 
 
 max_num_epochs: 1000
-num_explore_envs: 4
+num_explore_envs: 8
 num_eval_envs: 1
 
 train_batches_per_epoch: 2
 collect_batches_per_epoch: 1
-initial_collect_batches: 20
+initial_collect_batches: 10
 num_eval_episodes: 10
 eval_interval: 100
 
 train_sequence_length: 100
 batch_size: 64
-replay_buffer_max_length: 5_000_000
+replay_buffer_max_length: 2_000_000
 use_tf_functions: true
 
 checkpoint_interval: 1000
-max_checkpoints_to_keep: 20
+max_checkpoints_to_keep: 100

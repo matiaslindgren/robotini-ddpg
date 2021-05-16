@@ -48,7 +48,7 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
             "crash_count": 0,
             "return_to_track_count": 0,
             "track_segment": 0,
-            "frames": [np.zeros(camera.frame_shape)],
+            "frames": [np.zeros(camera.frame_shape, np.float32)],
             "simulator_state": log_parser.to_numpy(log_parser.empty_state()),
         }
         # State that persists across steps but not episodes

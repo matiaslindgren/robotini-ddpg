@@ -67,7 +67,7 @@ def camera_frames_to_observation(frame_batch):
     y = y.reshape((n_y, y.shape[0]//n_y) + y.shape[1:])
     x = x.mean(axis=1)
     y = y.mean(axis=1)
-    o = np.concatenate((x, y))
+    o = np.concatenate((x, y)).astype(np.float32)
     assert not np.isnan(o).any(), "nan inputs"
     return frame, o
 

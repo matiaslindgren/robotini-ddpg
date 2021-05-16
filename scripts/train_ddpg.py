@@ -74,8 +74,8 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
 
     tf_agent = agent.create(
         conf.agent_type,
-        train_env.time_step_spec(),
-        train_env.action_spec(),
+        explore_env.time_step_spec(),
+        explore_env.action_spec(),
         conf.actor,
         conf.critic,
         dict(conf.agent_kwargs, target_update_period=max(1, int(conf.train_batches_per_epoch/conf.target_updates_per_epoch))))
