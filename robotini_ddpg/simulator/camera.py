@@ -1,17 +1,15 @@
 """
-Simulator camera frame reader.
-Most of the code is from the original Robotini Python template.
+Simulator camera frame reader from the Robotini Python template.
+OpenCV has been replaced with TensorFlow.
 """
-import base64
-
-import cv2
 import numpy as np
+import tensorflow as tf
 
 
 frame_shape = (80, 128, 3)
 
 class rgb_idx:
-    B, G, R = 0, 1, 2
+    R, G, B = 0, 1, 2
 
 def read_buffer(socket):
     length_as_bytes = socket.recv(2)
@@ -23,11 +21,12 @@ def read_buffer(socket):
 
 def buffer_to_frame(buf):
     nparr = np.frombuffer(buf, np.uint8)
-    frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    return frame
+    frame = tf.io.decode_image(nparr,
+            # Return a single frame instead of a batch
+            expand_animations=False)
+    return frame.numpy()
 
-def frame_to_base64(frame, size=None):
-    ret, jpg = cv2.imencode('.jpg', frame)
-    if size:
-        jpg.resize(size)
-    return 'data:image/png;base64,' + base64.b64encode(jpg.tobytes()).decode("utf-8")
+def frame_to_base64(frame):
+    png = tf.io.encode_png(frame)
+    base64 = tf.io.encode_base64(base64)
+    return 'data:image/png;base64,' + base64.numpy().decode("utf-8")

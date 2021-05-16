@@ -93,18 +93,21 @@ def compute_turn_from_color_mass(observation):
     return turn
 
 
-# Modified version of find_bgr_pixels_over_treshold from the Robotini Python template
-def threshold_rgb(img, threshold=100):
-    b, g, r = cv2.split(img)
+# Simplified non-opencv version of find_bgr_pixels_over_treshold from the Robotini Python template
+def threshold_rgb(img, threshold=100.0):
+    r, g, b = (
+        img[:,:,rgb_idx.R],
+        img[:,:,rgb_idx.G],
+        img[:,:,rgb_idx.B],
+    )
     max_px = np.maximum(np.maximum(r, g), b)
 
     def process_channel(chan):
-        chan[chan < max_px] = 0
-        _, chan = cv2.threshold(chan, threshold, 255, cv2.THRESH_BINARY)
-        return chan
+        chan[chan < max_px] = 0.0
+        return np.where(chan > threshold, 255.0, 0.0)
 
-    b = process_channel(b)
-    g = process_channel(g)
     r = process_channel(r)
+    g = process_channel(g)
+    b = process_channel(b)
 
-    return cv2.merge((b, g, r))
+    return np.stack((r, g, b), axis=-1)

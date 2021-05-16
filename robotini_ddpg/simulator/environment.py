@@ -8,7 +8,6 @@ import json
 
 from redis import Redis
 import numpy as np
-from scipy.spatial.distance import minkowski
 from tf_agents.environments import py_environment
 from tf_agents.environments import tf_py_environment, batched_py_environment
 from tf_agents.specs import array_spec
@@ -176,7 +175,7 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
         episode["observation"] = observation
         episode["original_frame"] = frame
         if "position" in episode:
-            episode["distance"] += minkowski(episode["position"], sim_state["position"], 2)
+            episode["distance"] += np.linalg.norm(episode["position"] - sim_state["position"])
         episode["position"] = sim_state["position"]
 
         # Compute reward at current env step
