@@ -9,11 +9,13 @@ class BadConfig(Exception):
     pass
 
 
-def create(agent_type, time_step_spec, action_spec, actor_conf, critic_conf, agent_kwargs):
+def create(agent_type, time_step_spec, action_spec, actor_conf, critic_conf, network_update_period, agent_kwargs):
+    agent_kwargs = dict(agent_kwargs, target_update_period=network_update_period)
     if agent_type == "ddpg":
         Agent = ddpg_agent.DdpgAgent
     elif agent_type == "td3":
         Agent = td3_agent.Td3Agent
+        agent_kwargs = dict(agent_kwargs, actor_update_period=network_update_period)
     else:
         raise BadConfig("unknown agent type '{}'".format(agent_type))
     actor = actor_rnn_network.ActorRnnNetwork(

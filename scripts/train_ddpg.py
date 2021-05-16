@@ -78,7 +78,8 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
         explore_env.action_spec(),
         conf.actor,
         conf.critic,
-        dict(conf.agent_kwargs, target_update_period=max(1, int(conf.train_batches_per_epoch/conf.target_updates_per_epoch))))
+        max(1, int(conf.train_batches_per_epoch/conf.network_updates_per_epoch)),
+        conf.agent_kwargs)
 
     tf_agent._actor_network.summary(print_fn=logging.info)
     if conf.agent_type == "td3":
