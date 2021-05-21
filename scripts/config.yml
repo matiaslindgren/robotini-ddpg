@@ -1,8 +1,8 @@
 env_kwargs:
   fps_limit: 60
   laps_per_episode: 1
-  max_env_steps_per_episode: 4000
-  forward_range: [0.02, 0.15]
+  max_env_steps_per_episode: 2000
+  forward_range: [0.02, 0.1]
   turn_range: [-1.0, 1.0]
 
 actor:
@@ -13,41 +13,39 @@ actor:
     output_fc_layer_params: null
 
 critic:
-  learning_rate: 0.0001
+  learning_rate: 0.001
   kwargs:
-    observation_fc_layer_params: null
-    action_fc_layer_params: null
-    joint_fc_layer_params: [512, 256]
+    observation_fc_layer_params: [512, 256]
+    action_fc_layer_params: [512, 256]
+    joint_fc_layer_params: [256]
     lstm_size: [256]
     output_fc_layer_params: null
 
-network_updates_per_epoch: 0.5
+network_updates_per_epoch: 1
 
-agent_type: td3
-agent_kwargs:
-  target_update_tau: 0.005
-  gamma: 0.98
-  exploration_noise_std: 0.05
-  target_policy_noise: 0.1
-  target_policy_noise_clip: 0.2
-  summarize_grads_and_vars: true
-  debug_summaries: false
-
-# agent_type: ddpg
+# agent_type: td3
 # agent_kwargs:
 #   target_update_tau: 0.005
 #   gamma: 0.99
-#   ou_stddev: 0.05
-#   ou_damping: 0.05
+#   exploration_noise_std: 0.3
 #   summarize_grads_and_vars: true
 #   debug_summaries: false
 
+agent_type: ddpg
+agent_kwargs:
+  target_update_tau: 0.01
+  gamma: 0.99
+  ou_stddev: 0.05
+  ou_damping: 0.05
+  summarize_grads_and_vars: true
+  debug_summaries: false
 
-max_num_epochs: 1000
-num_explore_envs: 8
+
+max_num_epochs: 10000
+num_explore_envs: 6
 num_eval_envs: 1
 
-train_batches_per_epoch: 2
+train_batches_per_epoch: 5
 collect_batches_per_epoch: 1
 initial_collect_batches: 10
 num_eval_episodes: 10
@@ -55,7 +53,7 @@ eval_interval: 100
 
 train_sequence_length: 100
 batch_size: 64
-replay_buffer_max_length: 2_000_000
+replay_buffer_max_length: 3_000_000
 use_tf_functions: true
 
 checkpoint_interval: 1000

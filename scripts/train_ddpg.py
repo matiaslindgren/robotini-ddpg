@@ -72,13 +72,16 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
     eval_teams, eval_env = create_batched_robotini_env(
             eval_team_ids, car_socket_url, env_kwargs)
 
+    network_update_period = max(1, int(conf.train_batches_per_epoch/conf.network_updates_per_epoch))
+    logging.info("Network update period (in training steps/batches): %d", network_update_period)
+
     tf_agent = agent.create(
         conf.agent_type,
         explore_env.time_step_spec(),
         explore_env.action_spec(),
         conf.actor,
         conf.critic,
-        max(1, int(conf.train_batches_per_epoch/conf.network_updates_per_epoch)),
+        network_update_period,
         conf.agent_kwargs)
 
     tf_agent._actor_network.summary(print_fn=logging.info)
