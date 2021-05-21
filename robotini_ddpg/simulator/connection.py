@@ -95,6 +95,14 @@ class CarConnection:
                 target=communication_loop,
                 args=(name, self.stop_msg_queue, simulator_url, login_cmds, self.frame_queue, self.cmd_queue))
 
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, *exc_info):
+        self.stop()
+        return False
+
     def start(self):
         self.proc.start()
 

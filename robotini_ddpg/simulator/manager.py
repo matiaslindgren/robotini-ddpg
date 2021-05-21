@@ -41,6 +41,9 @@ class Team:
 
 
 class SimulatorManager:
+    """
+    Manages communication between the training environment, simulator, and Redis cache.
+    """
     def __init__(self, teams, log_socket_url, redis_socket_path, car_name_suffix=None):
         self.teams = OrderedDict((t.env.env_id, t) for t in teams)
         self.log_parser = log_parser.LogParser(log_socket_url, redis_socket_path)

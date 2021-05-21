@@ -3,7 +3,6 @@ Feature engineering, pre- and post-processing, and the reward function.
 """
 import time
 
-import cv2
 import numpy as np
 import tensorflow as tf
 from sklearn.preprocessing import minmax_scale

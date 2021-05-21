@@ -15,7 +15,7 @@ def run(policy_dir, config_path, car_socket_url, log_socket_url, redis_socket_pa
         env_kwargs = yaml.safe_load(f)["env_kwargs"]
     policy = tf.saved_model.load(policy_dir)
     env_kwargs = dict(env_kwargs, redis_socket_path=redis_socket_path)
-    teams, run_env = create_batched_robotini_env(["DDPG-1", "DDPG-2"], car_socket_url, env_kwargs)
+    teams, run_env = create_batched_robotini_env(["smol-brain"], car_socket_url, env_kwargs)
     driver = dynamic_episode_driver.DynamicEpisodeDriver(
             run_env,
             policy,

@@ -10,7 +10,7 @@ setuptools.setup(
     author_email="matias.lindgren@iki.fi",
     url="https://github.com/matiaslindgren/robotini-ddpg",
     license="MIT",
-    python_requires=">= 3.9.*",
+    python_requires=">= 3.6.*",
     packages=[
         "robotini_ddpg",
         "robotini_ddpg.simulator",
