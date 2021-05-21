@@ -15,12 +15,13 @@ n_x = n_y = 4
 observation_shape = (n_x+n_y, 3)
 
 complete_track_segment_bonus = 1.0
+max_track_segment_time = 1.0
 crash_penalty = 5.0
 max_track_angle = 100.0
 
 class RewardWeight:
-    wrong_direction = 1.0
-    track_segment_time = 0.5
+    wrong_direction = 10.0
+    track_segment_time = 1.0
     crash = 0.5
     track_segment_passed = 0.2
 
@@ -31,19 +32,21 @@ def reward(episode_state, epoch_state, simulator_state):
     sim = simulator_state
     total = 0.0
 
-    # Complete track segment (not finish line), smol bonus
+    # Complete track segment => small reward
     if sim["track_segment"] > 0 and sim["track_segment"] == episode["track_segment"] + 1:
         total += RewardWeight.track_segment_passed * complete_track_segment_bonus
-        # Faster completion, more bonus
         segment_time = episode["env_step_clock"] - episode["track_segment_begin_clock"]
-        total += RewardWeight.track_segment_time * complete_track_segment_bonus / (0.1 + segment_time)
+        if segment_time < max_track_segment_time:
+            # Fast completion => extra reward
+            total += RewardWeight.track_segment_time * complete_track_segment_bonus / np.clip(segment_time, 0.01, None)
 
-    # Crash, penalty. More speed, more penalty
+    # Crash => penalty. More speed during crash => more penalty
     if sim["crash_count"] > epoch["crash_count"]:
         total -= RewardWeight.crash * crash_penalty * (1 + abs(episode["speed"]))
 
     # Too large deviation from correct direction, penalty
-    if sim["track_angle"] > max_track_angle:
+    # Skip on first segment since the angle might be very wrong during/after spawn
+    if episode["num_crossed_track_segments"] > 0 and sim["track_angle"] > max_track_angle:
         delta_track_angle = sim["track_angle"] - max_track_angle
         track_angle_penalty = np.clip(delta_track_angle / max_track_angle, 0, None)
         total -= RewardWeight.wrong_direction * track_angle_penalty

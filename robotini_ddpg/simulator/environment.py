@@ -64,6 +64,7 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
             "track_segment": epoch["track_segment"],
             "track_segment_time": 0,
             "track_segment_begin_clock": now,
+            "num_crossed_track_segments": 0,
             "distance": 0,
             "crash_count": 0,
             "return": 0,
@@ -201,6 +202,7 @@ class RobotiniCarEnv(py_environment.PyEnvironment):
         if crossed_segment:
             episode["track_segment_time"] = episode["env_step_clock"] - episode["track_segment_begin_clock"]
             episode["track_segment_begin_clock"] = episode["env_step_clock"]
+            episode["num_crossed_track_segments"] += 1
 
         # Write JSON snapshot of current state into Redis
         self.write_state_snapshot(self.get_state_snapshot(sim_state))
