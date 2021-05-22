@@ -113,6 +113,14 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
             max_length=conf.replay_buffer_max_length,
             dataset_drop_remainder=True)
 
+    train_checkpointer = common.Checkpointer(
+            ckpt_dir=cache_dirs["checkpoints"],
+            max_to_keep=conf.max_checkpoints_to_keep,
+            agent=tf_agent,
+            policy=tf_agent.policy,
+            replay_buffer=replay_buffer,
+            global_step=tf_agent.train_step_counter)
+
     collect_driver = dynamic_step_driver.DynamicStepDriver(
             explore_env,
             tf_agent.collect_policy,
@@ -129,12 +137,14 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
         collect_driver.run = common.function(collect_driver.run)
         tf_agent.train = common.function(tf_agent.train)
 
-    # Initialize replay buffer by doing some exploration in the simulator
-    car_suffix = "init"
-    with SimulatorManager(explore_teams, log_socket_url, redis_socket_path, car_suffix+"_explore"):
-        logger.info("Collecting initial experience")
-        collect_driver.run()
-    logging.info('\n' + '\n'.join(util.format_metric(m) for m in collection_metrics))
+    if train_checkpointer.checkpoint_exists:
+        train_checkpointer.initialize_or_restore()
+    else:
+        logger.info("No existing checkpoint, replay buffer is empty. Collecting initial experience by doing random exploration in the simulator.")
+        car_suffix = "init"
+        with SimulatorManager(explore_teams, log_socket_url, redis_socket_path, car_suffix+"_explore"):
+            collect_driver.run()
+        logging.info('\n' + '\n'.join(util.format_metric(m) for m in collection_metrics))
 
     # Dataset generates trajectories with shape [BxTx...]
     dataset = replay_buffer.as_dataset(
@@ -155,15 +165,6 @@ def train(conf, cache_dir, car_socket_url, log_socket_url, redis_socket_path):
             tf_agent.policy,
             batch_size=eval_env.batch_size,
             train_step=tf_agent.train_step_counter)
-
-    train_checkpointer = common.Checkpointer(
-            ckpt_dir=cache_dirs["checkpoints"],
-            max_to_keep=conf.max_checkpoints_to_keep,
-            agent=tf_agent,
-            policy=tf_agent.policy,
-            replay_buffer=replay_buffer,
-            global_step=tf_agent.train_step_counter)
-    train_checkpointer.initialize_or_restore()
 
     # Start main training loop
     time_step = None
