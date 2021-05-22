@@ -11,7 +11,6 @@ All custom multiprocessing scribble could probably be replaced with a few lines 
 ## Demo
 
 Screen recordings from an 20 hour training session.
-Download the webm-files if your browser doesn't show them here.
 
 ### Untrained agent
 
