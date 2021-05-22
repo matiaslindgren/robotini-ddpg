@@ -55,3 +55,6 @@ run_debug_policy:
 		--log-socket-url $(LOG_SOCKET_URL) \
 		--redis-socket-path $(REDIS_SOCKET) \
 		--config-path $(CONFIG_PATH)
+
+readme:
+	@$(PYTHON_BIN) -c 'from mistune import html;print(html(open("README.md").read()))'
