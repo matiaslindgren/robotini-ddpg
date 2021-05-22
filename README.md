@@ -50,9 +50,10 @@ Therefore, the agent driving car `env7_step16000_eval` seen in the video under "
 https://user-images.githubusercontent.com/11295697/119233343-36ac8680-bb31-11eb-8fbf-e9f71f8e90d6.mp4
 
 
-### Model input (observation)
+### Observation (neural network input)
 
-Model input is 8 RGB pixels computed by averaging 4 row groups and 4 column groups of the input camera frame:
+The neural network sees 8 RGB pixels as input at each time step, also called the observation.
+These are computed by averaging 4 non-overlapping row and column groups of the input camera frame:
 ![4 images, one showing the processed camera frame, two showing how to compute the 8 average values from the frame and one image showing the resulting 8 pixels on one row][explain-observation]
 
 ### Exploration
@@ -96,9 +97,15 @@ On the training machine, run these commands in separate terminals
 
 ## Notes and nice-to-know things
 
-* `./tf-data` contains logging data and saved models, it can (should) be deleted between training runs. **Note**: If training produced a good agent, remember to backup it from `./tf-data/saved_policies` before deleting.
-* Interrupting or terminating the training script may (rarely) leave processes running. Check e.g. with `ps ax | grep 'scripts/train_ddpg.py'` or `pgrep -f train_ddpg.py` and clean unwanted processes with e.g. `pkill -ef 'python3.9 scripts/train_ddpg.py'` (fix pattern depending on `ps ax` output).
-* Every N training steps, the complete training state is written to `./tf-data/checkpoints`. This makes the training state persistent and allows you to continue training from the saved checkpoint. Note that this includes the full, pre-allocated replay buffer, which might make the checkpoints rather huge.
+* `./tf-data` contains TensorBoard logging data, saved agents/policies, checkpoints, i.e. all training state.
+  It can (should) be deleted between unrelated training runs.
+  **Note**: If a long training session produced a good agent, remember to backup it from `./tf-data/saved_policies` before deleting.
+  Perhaps even back up the whole `tf-data` directory.
+* Interrupting or terminating the training script may (rarely) leave processes running.
+  Check e.g. with `ps ax | grep 'scripts/train_ddpg.py'` or `pgrep -f train_ddpg.py` and clean unwanted processes with e.g. `pkill -ef 'python3.9 scripts/train_ddpg.py'` (fix pattern depending on `ps ax` output).
+* Every N training steps, the complete training state is written to `./tf-data/checkpoints`.
+  This makes the training state persistent and allows you to continue training from the saved checkpoint.
+    Note that this includes the full, pre-allocated replay buffer, which might make each checkpoint up to 2 GiB in size.
 * For end-to-end debugging of the whole system, try `make run_debug_policy`. This will run a trivial hand-written policy that computes the amount of turn from RGB colors (see `robotini_ddpg.features.compute_turn_from_color_mass`).
 * If the training log gets filled with `camera frame buffer is empty, skipping step` warnings, then the TensorFlow environment step loop is processing frames faster than we read from the simulator over the socket.
   Some known causes for this is that the simulator is under heavy load or the machine is sleeping.
