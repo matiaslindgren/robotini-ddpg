@@ -26,13 +26,13 @@ https://user-images.githubusercontent.com/11295697/119233195-7aeb5700-bb30-11eb-
 
 ### After 16000 training steps
 
-After 20 hours of training, the agent is driving decently:
+After 20 hours of training, the agent is driving somewhat ok:
 
 https://user-images.githubusercontent.com/11295697/119233260-dddcee00-bb30-11eb-9505-9ed36e6d2012.mp4
 
 #### Metrics
 
-TensorBoard provides visualizations for all metrics:
+TensorBoard provides visualizations for all metrics (only 2 shown here):
 ![two charts, both with slightly upwards trends][tensorboard-eval-metrics]
 
 Here we can see how the average episode length (number of steps from spawn to crash or full lap) and average return (discounted sum of rewards for one episode) improve over time.
@@ -103,6 +103,7 @@ On the training machine, run these commands in separate terminals
 * If the training log gets filled with `camera frame buffer is empty, skipping step` warnings, then the TensorFlow environment step loop is processing frames faster than we read from the simulator over the socket.
   Some known causes for this is that the simulator is under heavy load or the machine is sleeping.
   Also, the simulator dumps spectator logs to `race.log`, which can grow large if the simulator is running for a long time.
+* I have no idea if the hyperparameters in `./scripts/config.yml` are optimal. Some tweaking perhaps could improve the results and training speed drastically.
 
 
 [DDPG]: https://www.semanticscholar.org/paper/Continuous-control-with-deep-reinforcement-learning-Lillicrap-Hunt/024006d4c2a89f7acacc6e4438d156525b60a98f
