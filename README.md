@@ -16,17 +16,20 @@ Download the webm-files if your browser doesn't show them here.
 ### Untrained agent
 
 At the beginning, the agent has no policy for choosing actions based on inputs:
-![simulator car driving constantly forward, crashing into walls][video-eval-step0]
+
+https://user-images.githubusercontent.com/11295697/119233183-63ac6980-bb30-11eb-8f07-fcdde03c210c.mp4
 
 ### After 2000 training steps
 
 After 2 hours of training, the agent has learned to avoid the walls but is still making mistakes:
-![simulator car mostly avoiding the walls][video-eval-step2000]
+
+https://user-images.githubusercontent.com/11295697/119233195-7aeb5700-bb30-11eb-9a6c-d744ea498e09.mp4
 
 ### After 16000 training steps
 
 After 20 hours of training, the agent is driving decently:
-![simulator car avoiding the walls and staying on the track during turns][video-eval-step16000]
+
+https://user-images.githubusercontent.com/11295697/119233260-dddcee00-bb30-11eb-9505-9ed36e6d2012.mp4
 
 #### Metrics
 
@@ -43,10 +46,10 @@ Therefore, the agent driving car `env7_step16000_eval` seen in the video under "
 
 [This repository][trained-agent-repo] contains an agent from training step 11800.
 
-
 ### Live monitoring
 
-![web interface showing live telemetry from the car and a feed from the camera mounted on the car][video-web-ui]
+https://user-images.githubusercontent.com/11295697/119233343-36ac8680-bb31-11eb-8fbf-e9f71f8e90d6.mp4
+
 
 ### Model input (observation)
 
@@ -56,8 +59,8 @@ Model input is 8 RGB pixels computed by averaging 4 row groups and 4 column grou
 ### Exploration
 
 Experience gathering is done in parallel:
-![6 cars driving simultaneously in the simulator doing random exploration][video-explore-step16000]
 
+https://user-images.githubusercontent.com/11295697/119233302-0f55b980-bb31-11eb-931a-aec0a1a19842.mp4
 
 ## Requirements
 
