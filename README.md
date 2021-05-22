@@ -36,19 +36,27 @@ TensorBoard provides visualizations for all metrics:
 Here we can see how the average episode length (number of steps from spawn to crash or full lap) and average return (discounted sum of rewards for one episode) improve over time.
 Horizontal axis is the number of training steps.
 
+#### Note
+
+By looking at the metrics at step 16k, we can see a global minimum of approx. 400 avg. episode length and 20 avg. return during evaluation.
+Therefore, the agent driving car `env7_step16000_eval` seen in the video under "After 16000 training steps" might not be the optimal choice for a trained agent.
+
+[This repository][trained-agent-repo] contains an agent from training step 11800.
+
+
 ### Live monitoring
 
 ![web interface showing live telemetry from the car and a feed from the camera mounted on the car][video-web-ui]
 
 ### Model input (observation)
 
-Model input is 8 RGB pixels computed by averaging 4 rows and 4 columns of the input camera frame:
+Model input is 8 RGB pixels computed by averaging 4 row groups and 4 column groups of the input camera frame:
 ![4 images, one showing the processed camera frame, two showing how to compute the 8 average values from the frame and one image showing the resulting 8 pixels on one row][explain-observation]
 
 ### Exploration
 
 Experience gathering is done in parallel:
-![Multiple cars driving in the simulator randomly][video-explore-step16000]
+![6 cars driving simultaneously in the simulator doing random exploration][video-explore-step16000]
 
 
 ## Requirements
@@ -108,3 +116,4 @@ On the training machine, run these commands in separate terminals
 [video-eval-step16000]: ./media/eval-step16000.webm
 [video-web-ui]: ./media/web-ui.webm
 [video-explore-step16000]: ./media/explore-step16000.webm
+[trained-agent-repo]: https://github.com/matiaslindgren/robotini-ddpg-agent

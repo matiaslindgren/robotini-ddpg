@@ -47,6 +47,7 @@ run_trained_policy:
 		--car-socket-url $(CAR_SOCKET_URL) \
 		--log-socket-url $(LOG_SOCKET_URL) \
 		--redis-socket-path $(REDIS_SOCKET) \
+		--config-path $(CONFIG_PATH) \
 		--policy-dir $(SAVED_POLICY_DIR)
 
 run_debug_policy:
