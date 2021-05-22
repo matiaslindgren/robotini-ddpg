@@ -76,7 +76,7 @@ There are no guarantees that an agent trained on one track will work on other tr
 
 If you still want to try training a new agent from scratch, here's how to get started:
 
-1. Start the simulator (use the [fork][robotini-simulator-fork])
+1. Start the simulator (use the [fork][robotini-simulator-fork]) using [this config file](./RaceParameters.json).
 2. If using a single machine for both training and running the simulator, set `SIMULATOR_HOST := localhost` in the Makefile.
 Otherwise, set the address of the simulator machine.
 

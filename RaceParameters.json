@@ -1,0 +1,8 @@
+{
+    "lapCount": 5,
+    "numSegments": 30,
+    "numSegmentsBetweenCars": 2,
+    "mode": "development",
+    "visibility": "public",
+    "track": "final_koira.json"
+}
