@@ -28,8 +28,11 @@ After 2 hours of training, the agent has learned to avoid the walls but is still
 After 20 hours of training, the agent is driving decently:
 ![simulator car avoiding the walls and staying on the track during turns][video-eval-step16000]
 
+#### Metrics
+
 TensorBoard provides visualizations for all metrics:
 ![two charts, both with slightly upwards trends][tensorboard-eval-metrics]
+
 Here we can see how the average episode length (number of steps from spawn to crash or full lap) and average return (discounted sum of rewards for one episode) improve over time.
 Horizontal axis is the number of training steps.
 
